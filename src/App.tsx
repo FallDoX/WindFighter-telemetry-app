@@ -41,6 +41,11 @@ const verticalCursorPlugin = {
     chart.verticalCursor = { x: null, visible: false, lastX: null };
   },
   afterEvent: (chart: any, args: any) => {
+    // Safety check - ensure verticalCursor exists
+    if (!chart.verticalCursor) {
+      chart.verticalCursor = { x: null, visible: false, lastX: null };
+    }
+    
     const { event } = args;
     if (event.type === 'mousemove') {
       const points = chart.getElementsAtEventForMode(event, 'index', { intersect: false }, true);
@@ -60,7 +65,8 @@ const verticalCursorPlugin = {
     }
   },
   afterDraw: (chart: any) => {
-    if (!chart.verticalCursor.visible || chart.verticalCursor.x === null) return;
+    // Safety check - ensure verticalCursor exists and is visible
+    if (!chart.verticalCursor || !chart.verticalCursor.visible || chart.verticalCursor.x === null) return;
     
     const ctx = chart.ctx;
     const { top, bottom } = chart.chartArea;

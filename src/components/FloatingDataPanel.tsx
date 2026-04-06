@@ -154,7 +154,9 @@ export function FloatingDataPanel({
             </div>
             <div className="text-right">
               <span className="text-xs font-semibold text-slate-100">
-                {item.value?.toFixed(item.unit === '%' ? 1 : 0)}
+                {typeof item.value === 'number' && !isNaN(item.value) 
+                  ? item.value.toFixed(item.unit === '%' ? 1 : 0)
+                  : '-'}
               </span>
               {item.unit && (
                 <span className="text-[10px] text-slate-500 ml-1">{item.unit}</span>

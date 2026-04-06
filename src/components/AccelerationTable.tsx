@@ -16,18 +16,20 @@ interface AccelerationTableProps {
   onThresholdsChange: (thresholds: SpeedThreshold[]) => void;
 }
 
-const THRESHOLD_COLORS = [
-  { bg: 'from-emerald-500/20', text: 'text-emerald-400', active: 'bg-emerald-500', ring: 'ring-emerald-400' },
-  { bg: 'from-blue-500/20', text: 'text-blue-400', active: 'bg-blue-500', ring: 'ring-blue-400' },
-  { bg: 'from-purple-500/20', text: 'text-purple-400', active: 'bg-purple-500', ring: 'ring-purple-400' },
-  { bg: 'from-orange-500/20', text: 'text-orange-400', active: 'bg-orange-500', ring: 'ring-orange-400' },
-  { bg: 'from-pink-500/20', text: 'text-pink-400', active: 'bg-pink-500', ring: 'ring-pink-400' },
-  { bg: 'from-cyan-500/20', text: 'text-cyan-400', active: 'bg-cyan-500', ring: 'ring-cyan-400' },
-];
 
 export function AccelerationTable({ data, thresholds, onThresholdsChange }: AccelerationTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const [editStartValue, setEditStartValue] = useState('');
+  const [editEndValue, setEditEndValue] = useState('');
+  const updateThresholdFromSlider = useCallback((id: string, value: number) => {
+    const threshold = thresholds.find(t => t.id === id);
+    if (!threshold) return;
+    const startVal = threshold.startValue ?? 0;
+    const newLabel = `${startVal}-${value}`;
+    onThresholdsChange(thresholds.map(t =>
+      t.id === id ? { ...t, value: value, label: newLabel } : t
+    ));
+  }, [thresholds, onThresholdsChange]);
 
   const results = useMemo(() => 
     getAccelerationForThresholds(data, thresholds),
@@ -103,9 +105,10 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
   const addThreshold = () => {
     const newId = `t${Date.now()}`;
     const maxValue = Math.max(...thresholds.map(t => t.value)) + 10;
-    onThresholdsChange([...thresholds, { id: newId, label: `0-${maxValue}`, value: maxValue }]);
+    onThresholdsChange([...thresholds, { id: newId, label: `0-${maxValue}`, value: maxValue, startValue: 0 }]);
     setEditingId(newId);
-    setEditValue(maxValue.toString());
+    setEditStartValue('0');
+    setEditEndValue(maxValue.toString());
   };
 
   const removeThreshold = useCallback((id: string) => {
@@ -117,21 +120,25 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
 
   const startEdit = (threshold: SpeedThreshold) => {
     setEditingId(threshold.id);
-    setEditValue(threshold.value.toString());
+    setEditStartValue((threshold.startValue ?? 0).toString());
+    setEditEndValue(threshold.value.toString());
   };
 
   const saveEdit = useCallback((id: string) => {
-    const newValue = parseInt(editValue);
-    if (!isNaN(newValue) && newValue > 0) {
-      const newLabel = `0-${newValue}`;
+    const newStartValue = parseInt(editStartValue);
+    const newEndValue = parseInt(editEndValue);
+    if (!isNaN(newEndValue) && newEndValue > 0 && !isNaN(newStartValue) && newStartValue >= 0 && newStartValue < newEndValue) {
+      const newLabel = `${newStartValue}-${newEndValue}`;
       onThresholdsChange(thresholds.map(t =>
-        t.id === id ? { ...t, value: newValue, label: newLabel } : t
+        t.id === id ? { ...t, value: newEndValue, startValue: newStartValue, label: newLabel } : t
       ));
     }
     setEditingId(null);
-  }, [editValue, thresholds, onThresholdsChange]);
+  }, [editStartValue, editEndValue, thresholds, onThresholdsChange]);
 
-  const cancelEdit = () => setEditingId(null);
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
 
   const formatTime = (seconds: number | null): string => {
     if (seconds === null) return '—';
@@ -203,7 +210,7 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
     <div className="space-y-6">
       {/* Consumption Summary - Energy efficiency while riding */}
       {consumptionStats && (
-        <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
+        <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
           <div className="p-5 border-b border-white/10">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-orange-500/25">
@@ -212,9 +219,18 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-bold text-white">Энергоэффективность</h3>
-                  <Tooltip content="Потребление энергии только во время движения (скорость >5 км/ч). Показывает насколько эффективно используется батарея.">
-                    <Info className="w-4 h-4 text-slate-500 cursor-help" />
-                  </Tooltip>
+                  {/* Inline tooltip */}
+                  <div className="relative group">
+                    <Info className="w-4 h-4 text-slate-500 cursor-help hover:text-slate-400 transition-colors" />
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-[260px] bg-slate-900/95 backdrop-blur-xl rounded-xl border border-cyan-500/30 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 overflow-hidden">
+                      <div className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 px-3 py-2 border-b border-cyan-500/20">
+                        <span className="text-xs font-bold text-cyan-200">Энергоэффективность</span>
+                      </div>
+                      <div className="p-3 text-xs text-slate-300 leading-relaxed">
+                        Потребление энергии только во время движения (скорость {'>'}5 км/ч). Показывает насколько эффективно используется батарея.
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-400">
                   Время в движении: {formatTimeShort(consumptionStats.duration)} • Расстояние: {(consumptionStats.distance / 1000).toFixed(1)} км
@@ -298,9 +314,18 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-bold text-white">Ускорение</h3>
-                  <Tooltip content="Время разгона от 0 до заданной скорости. Показывается лучшее время из всех попыток.">
-                    <Info className="w-4 h-4 text-slate-500 cursor-help" />
-                  </Tooltip>
+                  {/* Inline tooltip */}
+                  <div className="relative group">
+                    <Info className="w-4 h-4 text-slate-500 cursor-help hover:text-slate-400 transition-colors" />
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-[260px] bg-slate-900/95 backdrop-blur-xl rounded-xl border border-amber-500/30 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 overflow-hidden">
+                      <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 px-3 py-2 border-b border-amber-500/20">
+                        <span className="text-xs font-bold text-amber-200">Ускорение</span>
+                      </div>
+                      <div className="p-3 text-xs text-slate-300 leading-relaxed">
+                        Время разгона от 0 до заданной скорости. Показывается лучшее время из всех попыток.
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-400">
                   {bestTime !== null ? `Лучшее: ${formatTime(bestTime)}` : 'Кликните для редактирования'}
@@ -317,24 +342,33 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
             </Tooltip>
           </div>
 
-          {/* Quick presets */}
+          {/* Quick presets - toggle on/off */}
           <div className="flex flex-wrap gap-2">
-            <span className="text-xs text-slate-500 self-center mr-2">Быстро:</span>
+            <span className="text-xs text-slate-500 self-center mr-2">Шаблоны:</span>
             {[25, 50, 60, 80, 100, 120].map(val => {
-              const exists = thresholds.some(t => t.value === val);
+              const existingThreshold = thresholds.find(t => t.value === val);
+              const exists = !!existingThreshold;
               return (
                 <button
                   key={val}
-                  onClick={() => !exists && onThresholdsChange([...thresholds, { id: `t${val}`, label: `0-${val}`, value: val }])}
-                  disabled={exists}
+                  onClick={() => {
+                    if (exists && existingThreshold) {
+                      // Remove existing threshold
+                      onThresholdsChange(thresholds.filter(t => t.id !== existingThreshold.id));
+                    } else {
+                      // Add new threshold
+                      onThresholdsChange([...thresholds, { id: `t${val}`, label: `0-${val}`, value: val, startValue: 0 }]);
+                    }
+                  }}
                   className={cn(
-                    "px-3 py-1 rounded-lg text-xs font-medium transition-all",
+                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-all border",
                     exists 
-                      ? "bg-white/5 text-slate-600 cursor-not-allowed line-through" 
-                      : "bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white"
+                      ? "bg-blue-500/30 border-blue-500/50 text-blue-200" 
+                      : "bg-white/10 border-white/10 text-slate-300 hover:bg-white/20 hover:text-white"
                   )}
                 >
-                  {val}
+                  {exists && <Check className="w-3 h-3 inline mr-1" />}
+                  {val} км/ч
                 </button>
               );
             })}
@@ -343,13 +377,11 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
 
         {/* Thresholds - Compact list */}
         <div className="p-5 space-y-2">
-          {thresholds.map((threshold, index) => {
+          {thresholds.map((threshold) => {
             const result = results[threshold.id];
             const time = result?.time;
             const isBest = time !== null && time === bestTime;
             const barWidth = maxTime > 0 && time !== null ? (time / maxTime) * 100 : 0;
-            const colorIdx = index % THRESHOLD_COLORS.length;
-            const colors = THRESHOLD_COLORS[colorIdx];
             const isEditing = editingId === threshold.id;
 
             return (
@@ -365,24 +397,41 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
                 {/* Label */}
                 <div className="min-w-[100px]">
                   {isEditing ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') saveEdit(threshold.id);
-                          if (e.key === 'Escape') cancelEdit();
-                        }}
-                        className="w-14 bg-white/5 text-white text-sm px-2 py-1 rounded border border-white/20 focus:border-blue-500 outline-none"
-                        autoFocus
-                      />
-                      <button onClick={() => saveEdit(threshold.id)} className="p-1 hover:bg-white/10 rounded">
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      </button>
-                      <button onClick={cancelEdit} className="p-1 hover:bg-white/10 rounded">
-                        <X className="w-3.5 h-3.5 text-red-400" />
-                      </button>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={editStartValue}
+                          onChange={e => setEditStartValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveEdit(threshold.id);
+                            if (e.key === 'Escape') cancelEdit();
+                          }}
+                          className="w-12 bg-white/5 text-white text-sm px-2 py-1 rounded border border-white/20 focus:border-blue-500 outline-none"
+                          placeholder="0"
+                          min="0"
+                        />
+                        <span className="text-slate-400">-</span>
+                        <input
+                          type="number"
+                          value={editEndValue}
+                          onChange={e => setEditEndValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveEdit(threshold.id);
+                            if (e.key === 'Escape') cancelEdit();
+                          }}
+                          className="w-12 bg-white/5 text-white text-sm px-2 py-1 rounded border border-white/20 focus:border-blue-500 outline-none"
+                          placeholder="60"
+                          min="1"
+                          max="200"
+                        />
+                        <button onClick={() => saveEdit(threshold.id)} className="p-1 hover:bg-white/10 rounded">
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        </button>
+                        <button onClick={cancelEdit} className="p-1 hover:bg-white/10 rounded">
+                          <X className="w-3.5 h-3.5 text-red-400" />
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <button
@@ -396,23 +445,95 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
                   )}
                 </div>
 
-                {/* Time bar */}
-                <div className="flex-1 h-8 bg-white/5 rounded-lg overflow-hidden relative">
-                  {time !== null ? (
-                    <div
-                      className={cn(
-                        "h-full bg-gradient-to-r rounded-lg transition-all duration-500 flex items-center px-3",
-                        colors.bg.replace('/20', ''),
-                        isBest && `ring-1 ${colors.ring}`
-                      )}
-                      style={{ width: `${Math.max(barWidth, 15)}%` }}
-                    >
-                      <span className="text-white font-bold text-sm">{formatTime(time)}</span>
-                    </div>
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-slate-500 text-xs">—</span>
-                    </div>
+                {/* Time bar with integrated data display */}
+                <div className="flex-1 h-12 bg-white/5 rounded-xl overflow-hidden relative group/bar border border-white/5">
+                  {/* Scale labels - background */}
+                  <div className="absolute inset-x-0 top-1 flex justify-between px-2 text-[7px] text-slate-600 font-medium">
+                    <span>0</span>
+                    <span>50</span>
+                    <span>100</span>
+                    <span>150</span>
+                    <span>200</span>
+                  </div>
+                  
+                  <div className="absolute inset-0 flex items-center px-2">
+                    {/* Background track */}
+                    <div className="absolute inset-x-2 h-3 bg-slate-800/50 rounded-full" />
+                    
+                    {/* Progress bar with gradient based on intensity */}
+                    {time !== null && (
+                      <>
+                        <div
+                          className={cn(
+                            "absolute left-2 h-3 rounded-full transition-all duration-500 shadow-lg",
+                            isBest 
+                              ? "bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 shadow-amber-500/30" 
+                              : "bg-gradient-to-r from-emerald-500 via-cyan-500 to-blue-500 shadow-blue-500/20"
+                          )}
+                          style={{ width: `calc(${Math.max(barWidth, 8)}% - 16px)` }}
+                        />
+                        {/* Shimmer effect for best */}
+                        {isBest && (
+                          <div className="absolute left-2 h-3 rounded-full overflow-hidden" style={{ width: `calc(${Math.max(barWidth, 8)}% - 16px)` }}>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                          </div>
+                        )}
+                      </>
+                    )}
+                    
+                    {/* Data overlay - time and acceleration */}
+                    {time !== null && (
+                      <div className="absolute left-3 right-3 flex items-center justify-between z-10">
+                        <div className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 rounded-full text-sm font-bold backdrop-blur-sm shadow-lg",
+                          isBest 
+                            ? "bg-amber-500/30 text-amber-200 border border-amber-400/50 shadow-amber-500/20" 
+                            : "bg-slate-900/60 text-white border border-white/20 shadow-black/20"
+                        )}>
+                          {isBest && <span className="text-amber-400">🏆</span>}
+                          <span className="tracking-wide">{formatTime(time)}</span>
+                        </div>
+                        
+                        {result?.bestRun?.peakAcceleration && (
+                          <div className={cn(
+                            "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold backdrop-blur-sm shadow-lg",
+                            isBest
+                              ? "bg-amber-400/20 text-amber-200 border border-amber-400/40 shadow-amber-500/20"
+                              : "bg-slate-900/60 text-slate-200 border border-white/15 shadow-black/20"
+                          )}>
+                            <span className="opacity-70">a:</span>
+                            <span className="font-bold">{result.bestRun.peakAcceleration.toFixed(2)}</span>
+                            <span className="opacity-60">м/с²</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Interactive slider - visible on hover */}
+                  <input
+                    type="range"
+                    min="0"
+                    max="200"
+                    step="5"
+                    value={threshold.value}
+                    onChange={(e) => {
+                      const newValue = parseInt(e.target.value);
+                      updateThresholdFromSlider(threshold.id, newValue);
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 group-hover/bar:opacity-100 cursor-pointer z-30 appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-xl [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-xl [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-0"
+                  />
+                  
+                  {/* Slider tooltip */}
+                  <div className="absolute -top-9 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-2.5 py-1 rounded-lg border border-white/20 opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none z-40 shadow-xl font-medium">
+                    {threshold.startValue ?? 0}-{threshold.value} км/ч
+                  </div>
+                </div>
+
+                {/* Right side - simplified */}
+                <div className="min-w-[60px] flex flex-col items-end">
+                  {time !== null && isBest && (
+                    <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Лучший</span>
                   )}
                 </div>
 
@@ -434,7 +555,7 @@ export function AccelerationTable({ data, thresholds, onThresholdsChange }: Acce
           <p className="text-[10px] text-slate-500 flex items-center gap-2">
             <Info className="w-3 h-3" />
             <span>
-                  💡 <b>Подсказки:</b> Кликните на значение порога (например «0-60») чтобы изменить • Наведите на метрику для подсказки • Время показывается в секундах
+                  💡 <b>Подсказки:</b> Кликните на значение порога (например «0-60») чтобы изменить начало и конец • Наведите на полосу и используйте ползунок (0-200, шаг 5) • Время показывается в секундах
             </span>
           </p>
         </div>

@@ -13,6 +13,23 @@ ChartJS.register(LinearScale, PointElement, Tooltip, Legend);
 
 type MetricKey = 'Speed' | 'Power' | 'Current' | 'PhaseCurrent' | 'Voltage' | 'BatteryLevel' | 'Temperature' | 'PWM' | 'Torque' | 'GPSSpeed';
 
+// Downsample data for mobile performance
+function downsampleScatterData(data: TripEntry[], maxPoints: number = 2000): TripEntry[] {
+  if (data.length <= maxPoints) return data;
+  
+  const step = Math.ceil(data.length / maxPoints);
+  const result: TripEntry[] = [];
+  
+  for (let i = 0; i < data.length; i += step) {
+    // Use max values in each bucket to preserve peaks
+    const bucket = data.slice(i, Math.min(i + step, data.length));
+    const maxPowerPoint = bucket.reduce((max, p) => p.Power > max.Power ? p : max, bucket[0]);
+    result.push(maxPowerPoint);
+  }
+  
+  return result;
+}
+
 interface MetricConfig {
   key: MetricKey;
   label: string;
@@ -68,6 +85,12 @@ export function ScatterPlot({ data }: ScatterPlotProps) {
   const [yAxis, setYAxis] = useState<MetricKey>('Power');
   const [colorMetric, setColorMetric] = useState<MetricKey>('PhaseCurrent');
 
+  // Detect mobile
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const maxPoints = isMobile ? 1000 : 3000;
+
+  const downsampledData = useMemo(() => downsampleScatterData(data, maxPoints), [data, maxPoints]);
+
   const availableMetrics = useMemo(() => {
     if (data.length === 0) return METRICS;
     
@@ -78,18 +101,18 @@ export function ScatterPlot({ data }: ScatterPlotProps) {
   }, [data]);
 
   const scatterData = useMemo(() => {
-    if (data.length === 0) return { datasets: [] };
+    if (downsampledData.length === 0) return { datasets: [] };
 
     const xConfig = METRICS.find(m => m.key === xAxis)!;
     const yConfig = METRICS.find(m => m.key === yAxis)!;
     const colorConfig = METRICS.find(m => m.key === colorMetric)!;
 
     // Calculate min/max for color normalization
-    const colorValues = data.map(d => d[colorMetric] || 0);
+    const colorValues = downsampledData.map(d => d[colorMetric] || 0);
     const colorMin = Math.min(...colorValues);
     const colorMax = Math.max(...colorValues);
 
-    const points = data.map(entry => ({
+    const points = downsampledData.map(entry => ({
       x: entry[xAxis] || 0,
       y: entry[yAxis] || 0,
       colorValue: entry[colorMetric] || 0,
@@ -101,12 +124,12 @@ export function ScatterPlot({ data }: ScatterPlotProps) {
         data: points,
         backgroundColor: points.map(p => getColorForValue(p.colorValue, colorMin, colorMax)),
         borderColor: 'transparent',
-        pointRadius: 3,
-        pointHoverRadius: 6,
+        pointRadius: isMobile ? 2 : 3,
+        pointHoverRadius: isMobile ? 4 : 6,
       }],
       colorRange: { min: colorMin, max: colorMax, label: colorConfig.label, unit: colorConfig.unit },
     };
-  }, [data, xAxis, yAxis, colorMetric]);
+  }, [downsampledData, xAxis, yAxis, colorMetric, isMobile]);
 
   const xConfig = METRICS.find(m => m.key === xAxis)!;
   const yConfig = METRICS.find(m => m.key === yAxis)!;

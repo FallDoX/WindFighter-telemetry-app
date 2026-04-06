@@ -14,22 +14,21 @@ export function TimeRangeSlider({ data, range, enabled, onRangeChange, onEnabled
   const dragStartPos = useRef(0);
   const dragStartRange = useRef<{ start: number; end: number } | null>(null);
 
-  if (data.length === 0 || !range) return null;
-
-  const minTime = data[0].timestamp;
-  const maxTime = data[data.length - 1].timestamp;
+  // Calculate time values, use defaults if no data
+  const minTime = data.length > 0 ? data[0].timestamp : 0;
+  const maxTime = data.length > 0 ? data[data.length - 1].timestamp : 0;
   const totalDuration = maxTime - minTime;
 
-  const toPercent = (time: number) => ((time - minTime) / totalDuration) * 100;
+  const toPercent = (time: number) => totalDuration > 0 ? ((time - minTime) / totalDuration) * 100 : 0;
 
-  const startPercent = toPercent(range.start);
-  const endPercent = toPercent(range.end);
+  const startPercent = range ? toPercent(range.start) : 0;
+  const endPercent = range ? toPercent(range.end) : 100;
 
   const handleMouseDown = (type: 'start' | 'end' | 'track', e: React.MouseEvent) => {
     e.preventDefault();
     setDragging(type);
     dragStartPos.current = e.clientX;
-    dragStartRange.current = { ...range };
+    dragStartRange.current = range ? { ...range } : null;
   };
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -84,6 +83,9 @@ export function TimeRangeSlider({ data, range, enabled, onRangeChange, onEnabled
     if (minutes > 0) return `${minutes}м ${seconds % 60}с`;
     return `${seconds}с`;
   };
+
+  // Early return after all hooks
+  if (data.length === 0 || !range) return null;
 
   const selectedDuration = range.end - range.start;
 

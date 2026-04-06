@@ -2,7 +2,7 @@ import Papa from 'papaparse';
 import type { TripEntry, TripSummary, AccelerationRun, AccelerationResult, SpeedThreshold, CSVFormat } from '../types.js';
 
 // Parse old format date: "02.04.2026 09:33:15.123"
-function parseOldDate(dateStr: any): number {
+function parseOldDate(dateStr: string | unknown): number {
   if (!dateStr || typeof dateStr !== 'string') return NaN;
   try {
     const trimmed = dateStr.trim();
@@ -33,7 +33,7 @@ function parseOldDate(dateStr: any): number {
 }
 
 // Parse new format: date="2026-03-22", time="11:30:38.234"
-function parseNewDate(dateStr: any, timeStr: any): number {
+function parseNewDate(dateStr: string | unknown, timeStr: string | unknown): number {
   try {
     const datePart = String(dateStr).trim();
     const timePart = String(timeStr).trim();
@@ -77,16 +77,16 @@ export function parseTripData(csv: string): TripEntry[] {
 
   if (!result.data || result.data.length === 0) return [];
 
-  const headers = Object.keys(result.data[0] as any);
+  const headers = Object.keys(result.data[0] as Record<string, unknown>);
   const format = detectFormat(headers);
 
-  const parsed = (result.data as any[]).map((row) => {
-    const entry: any = {};
+  const parsed = (result.data as Record<string, unknown>[]).map((row) => {
+    const entry: Partial<TripEntry> & { rawData?: Record<string, string | number> } = {};
 
-    const parseOptional = (val: any) => {
-      if (val === "" || val === null || val === undefined) return null;
+    const parseOptional = (val: string | number | unknown): number | undefined => {
+      if (val === "" || val === null || val === undefined) return undefined;
       const n = Number(val);
-      return isNaN(n) ? null : n;
+      return isNaN(n) ? undefined : n;
     };
 
     if (format === 'new') {
@@ -110,8 +110,8 @@ export function parseTripData(csv: string): TripEntry[] {
       entry.Torque = parseOptional(row.torque);
       entry.Temp2 = parseOptional(row.temp2);
       entry.Distance = parseOptional(row.distance);
-      entry.Mode = row.mode || '';
-      entry.Alert = row.alert || '';
+      entry.Mode = String(row.mode || '');
+      entry.Alert = String(row.alert || '');
       entry.GPSHeading = parseOptional(row.gps_heading);
       entry.GPSDistance = parseOptional(row.gps_distance);
 
@@ -162,9 +162,25 @@ export function parseTripData(csv: string): TripEntry[] {
 
 // Simple LTTB or similar downsampling could be complex,
 // let's use a simple nth point downsampling for UI performance
-export function downsample<T>(data: T[], limit: number = 2000): T[] {
+// Adaptive: higher limit when zoomed in (small time range)
+export function downsample<T>(data: T[], limit: number = 2000, timeRange?: { start: number; end: number } | null): T[] {
   if (data.length <= limit) return data;
-  const step = Math.ceil(data.length / limit);
+  
+  // If zoomed in (viewing less than 30% of data), use higher limit for precision
+  let adaptiveLimit = limit;
+  if (timeRange && data.length > 0) {
+    const dataStart = (data[0] as any).timestamp ?? 0;
+    const dataEnd = (data[data.length - 1] as any).timestamp ?? dataStart;
+    const totalRange = dataEnd - dataStart;
+    const viewRange = timeRange.end - timeRange.start;
+    
+    if (totalRange > 0 && viewRange / totalRange < 0.3) {
+      // Zoomed in - increase limit up to 2x for better precision
+      adaptiveLimit = Math.min(limit * 2, 4000);
+    }
+  }
+  
+  const step = Math.ceil(data.length / adaptiveLimit);
   const result: T[] = [];
   for (let i = 0; i < data.length; i += step) {
     result.push(data[i]);
@@ -235,7 +251,7 @@ export function calculateSummary(data: TripEntry[]): TripSummary {
 
   // Calculate acceleration metrics
   const accelerationRuns = findAccelerationRuns(data);
-  const best0to60 = calculateBestTimeForThreshold(data, 60, accelerationRuns);
+  const best0to60 = calculateBestTimeForThreshold(data, 60, 5, accelerationRuns);
   const peakAcc = calculatePeakAcceleration(data);
 
   const maxCurrent = Math.max(...data.map(e => e.Current || 0));
@@ -252,12 +268,18 @@ export function calculateSummary(data: TripEntry[]): TripSummary {
   }
 
   // Calculate consumption per km (Wh/km) - only during movement
+  // Use proper time integration (trapezoidal rule) instead of simple average
   let consumptionPerKm = 0;
   if (totalDistance > 0 && movingEntries.length > 1) {
-    // Use moving entries only (Speed > 5 km/h)
-    const movingDurationHours = movingDuration / 1000 / 3600;
-    const avgPowerMoving = movingEntries.reduce((acc, e) => acc + e.Power, 0) / movingEntries.length;
-    const totalEnergyMovingWh = avgPowerMoving * movingDurationHours;
+    // Calculate energy by integrating power over time
+    let totalEnergyMovingWh = 0;
+    for (let i = 1; i < movingEntries.length; i++) {
+      const prev = movingEntries[i - 1];
+      const curr = movingEntries[i];
+      const dt = (curr.timestamp - prev.timestamp) / 1000 / 3600; // hours
+      const avgPower = (prev.Power + curr.Power) / 2; // average power between points
+      totalEnergyMovingWh += avgPower * dt;
+    }
     consumptionPerKm = totalEnergyMovingWh / totalDistance;
   }
 
@@ -359,10 +381,12 @@ export function findAccelerationRuns(data: TripEntry[]): AccelerationRun[] {
 
 /**
  * Находит лучшее время для достижения целевой скорости из всех попыток
+ * Теперь поддерживает произвольную начальную скорость (startSpeed)
  */
 export function calculateBestTimeForThreshold(
   data: TripEntry[],
   targetSpeed: number,
+  startSpeedThreshold: number = 5, // По умолчанию допуск 5 км/ч от нуля
   runs?: AccelerationRun[]
 ): number | null {
   const accelerationRuns = runs || findAccelerationRuns(data);
@@ -370,7 +394,8 @@ export function calculateBestTimeForThreshold(
   let bestTime: number | null = null;
 
   for (const run of accelerationRuns) {
-    if (run.startSpeed > 5) continue; // Пропускаем если начали не с нуля (допуск 5 км/ч)
+    // Проверяем что начальная скорость в пределах допуска от заданной startSpeed
+    if (run.startSpeed > startSpeedThreshold + 5) continue;
 
     // Ищем момент достижения целевой скорости
     for (let i = 0; i < run.dataPoints.length; i++) {
@@ -406,6 +431,7 @@ function calculatePeakAcceleration(data: TripEntry[]): number {
 
 /**
  * Получает результаты ускорения для всех заданных порогов
+ * Теперь поддерживает произвольную начальную скорость (startValue)
  */
 export function getAccelerationForThresholds(
   data: TripEntry[],
@@ -417,9 +443,11 @@ export function getAccelerationForThresholds(
   for (const threshold of thresholds) {
     let bestTime: number | null = null;
     let bestRun: AccelerationRun | null = null;
+    const startSpeedLimit = threshold.startValue ?? 0; // Используем startValue если задан, иначе 0
 
     for (const run of runs) {
-      if (run.startSpeed > 5) continue;
+      // Проверяем что начальная скорость в пределах допуска от заданной startValue
+      if (run.startSpeed > startSpeedLimit + 5) continue;
 
       for (let i = 0; i < run.dataPoints.length; i++) {
         if (run.dataPoints[i].Speed >= threshold.value) {
@@ -449,10 +477,10 @@ export function getAccelerationForThresholds(
  * Пороги скорости по умолчанию
  */
 export const defaultThresholds: SpeedThreshold[] = [
-  { id: 't25', label: '0-25 км/ч', value: 25 },
-  { id: 't60', label: '0-60 км/ч', value: 60 },
-  { id: 't90', label: '0-90 км/ч', value: 90 },
-  { id: 't100', label: '0-100 км/ч', value: 100 },
+  { id: 't25', label: '0-25 км/ч', value: 25, startValue: 0 },
+  { id: 't60', label: '0-60 км/ч', value: 60, startValue: 0 },
+  { id: 't90', label: '0-90 км/ч', value: 90, startValue: 0 },
+  { id: 't100', label: '0-100 км/ч', value: 100, startValue: 0 },
 ];
 
 export interface DataFilterConfig {
@@ -471,24 +499,34 @@ export interface DataFilterConfig {
     Temp2: { min: number; max: number };
   };
   maxTimeGapSeconds: number;
+  gpsTeleportSpeedKmh: number;
+  gpsTeleportDistanceM: number;
+  gpsTeleportTimeS: number;
+  stuckGpsPoints: number;
+  distanceRollbackM: number;
 }
 
 export const defaultFilterConfig: DataFilterConfig = {
   enabled: true,
   limits: {
-    Speed: { min: 0, max: 200 },
-    Voltage: { min: 100, max: 180 },
+    Speed: { min: 0, max: 250 },
+    Voltage: { min: 50, max: 300 },
     Current: { min: -50, max: 100 },
-    Power: { min: -5000, max: 15000 },
+    Power: { min: -5000, max: 25000 },
     BatteryLevel: { min: 0, max: 100 },
     Temperature: { min: -20, max: 100 },
     PWM: { min: 0, max: 100 },
-    GPSSpeed: { min: 0, max: 200 },
-    PhaseCurrent: { min: 0, max: 200 },
+    GPSSpeed: { min: 0, max: 250 },
+    PhaseCurrent: { min: 0, max: 300 },
     Torque: { min: 0, max: 200 },
     Temp2: { min: -20, max: 100 },
   },
   maxTimeGapSeconds: 10,
+  gpsTeleportSpeedKmh: 300,
+  gpsTeleportDistanceM: 500,
+  gpsTeleportTimeS: 5,
+  stuckGpsPoints: 10,
+  distanceRollbackM: 10,
 };
 
 export function filterData(data: TripEntry[], config: DataFilterConfig = defaultFilterConfig): { filtered: TripEntry[]; removed: number; issues: string[] } {
@@ -530,7 +568,7 @@ export function filterData(data: TripEntry[], config: DataFilterConfig = default
         return false;
       }
 
-      // GPS teleportation check
+      // GPS teleportation check - use configurable thresholds
       if (entry.Latitude !== null && entry.Longitude !== null && 
           prevEntry.Latitude !== null && prevEntry.Longitude !== null) {
         const distance = haversineDistance(
@@ -542,8 +580,8 @@ export function filterData(data: TripEntry[], config: DataFilterConfig = default
         if (timeGap > 0) {
           const speed = (distance / timeGap) * 3.6; // km/h
           
-          // Teleportation: >200 km/h or >500m in <5s
-          if (speed > 200 || (distance > 500 && timeGap < 5)) {
+          // Teleportation: >config.gpsTeleportSpeedKmh km/h or >config.gpsTeleportDistanceM in <config.gpsTeleportTimeS
+          if (speed > config.gpsTeleportSpeedKmh || (distance > config.gpsTeleportDistanceM && timeGap < config.gpsTeleportTimeS)) {
             issues.push(`GPS teleport ${distance.toFixed(0)}m in ${timeGap.toFixed(1)}s (${speed.toFixed(0)} km/h) at index ${index}`);
             removed++;
             return false;
@@ -551,23 +589,23 @@ export function filterData(data: TripEntry[], config: DataFilterConfig = default
         }
       }
 
-      // Stuck GPS detection (same coordinates)
+      // Stuck GPS detection (same coordinates) - configurable threshold
       if (entry.Latitude !== null && entry.Longitude !== null &&
           prevEntry.Latitude !== null && prevEntry.Longitude !== null) {
         if (entry.Latitude === prevEntry.Latitude && entry.Longitude === prevEntry.Longitude) {
           if (stuckStartIndex === null) stuckStartIndex = index - 1;
         } else {
-          if (stuckStartIndex !== null && index - stuckStartIndex > 10) {
+          if (stuckStartIndex !== null && index - stuckStartIndex > config.stuckGpsPoints) {
             issues.push(`Stuck GPS for ${index - stuckStartIndex} points at index ${stuckStartIndex}`);
           }
           stuckStartIndex = null;
         }
       }
 
-      // GPS distance backward check
+      // GPS distance backward check - configurable threshold
       if (entry.GPSDistance !== undefined && entry.GPSDistance !== null && 
           prevEntry.GPSDistance !== undefined && prevEntry.GPSDistance !== null) {
-        if (entry.GPSDistance < prevEntry.GPSDistance - 10) { // Decreased by >10m
+        if (entry.GPSDistance < prevEntry.GPSDistance - config.distanceRollbackM) {
           issues.push(`GPS distance rollback ${prevEntry.GPSDistance.toFixed(0)}→${entry.GPSDistance.toFixed(0)}m at index ${index}`);
           removed++;
           return false;

@@ -3,8 +3,8 @@ export type Language = 'en' | 'ru';
 export const translations = {
   en: {
     // Header
-    appTitle: 'Trip Log Analyzer',
-    appSubtitle: 'Professional telemetry visualization',
+    appTitle: 'WindFighter EUC',
+    appSubtitle: 'Professional EUC telemetry',
     uploadCSV: 'Upload CSV',
     dropCSV: 'Drop CSV File',
     dropCSVSubtitle: 'Processing your telemetry data...',
@@ -86,15 +86,15 @@ export const translations = {
     scale: 'Scale',
     reset: 'Reset',
     mobileHint: '📱 Mobile: 1 finger = pan | 2 fingers = pinch-zoom | 👆 Zoom buttons',
-    desktopHint: '💻 PC: Horizontal swipe = pan | Shift+Scroll = zoom | Double click = reset',
+    desktopHint: '💻 PC: Horizontal swipe = pan | Shift+Scroll = zoom | Double click = zoom in',
 
     // File
     uploadError: 'Please upload a CSV file',
   },
   ru: {
     // Header
-    appTitle: 'Анализатор поездок',
-    appSubtitle: 'Профессиональная визуализация телеметрии',
+    appTitle: 'WindFighter EUC',
+    appSubtitle: 'Профессиональная телеметрия EUC',
     uploadCSV: 'Загрузить CSV',
     dropCSV: 'Перетащите CSV файл',
     dropCSVSubtitle: 'Обработка данных телеметрии...',
@@ -143,10 +143,10 @@ export const translations = {
     distance: 'Расстояние',
     movingTime: 'Время в движении',
     maxPower: 'Макс. мощность',
-    batteryDrop: 'Просадка батареи',
-    batteryDischarge: 'Разряд батареи',
-    batteryVoltageDrop: 'Падение напряжения',
-    maxBatteryDrop: 'Макс. просадка',
+    batteryDrop: 'Общий разряд батареи',
+    batteryDischarge: 'Разряд за поездку',
+    batteryVoltageDrop: 'Падение напряжения под нагрузкой',
+    maxBatteryDrop: 'Макс. просадка от пика',
     consumption: 'Расход',
     maxCurrent: 'Макс. ток',
     duration: 'Длительность',
@@ -176,7 +176,7 @@ export const translations = {
     scale: 'Шкала',
     reset: 'Сброс',
     mobileHint: '📱 Телефон: 1 палец = панорама | 2 пальца = pinch-зум | 👆 Кнопки зума',
-    desktopHint: '💻 ПК: Горизонтальный свайп = панорама | Shift+Scroll = зум | Двойной клик = сброс',
+    desktopHint: '💻 ПК: Горизонтальный свайп = панорама | Shift+Scroll = зум | Двойной клик = приближение',
 
     // File
     uploadError: 'Пожалуйста, загрузите CSV файл',

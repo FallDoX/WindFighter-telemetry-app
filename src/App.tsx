@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import type { ChartOptions } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import React, { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
+import { Line, Scatter } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import {
   Chart as ChartJS,
@@ -19,18 +18,65 @@ import type { TripEntry, TripSummary, SpeedThreshold } from './types';
 import { 
   Activity, Battery, Gauge, Thermometer, Zap, Clock, TrendingUp, Rocket, 
   Settings, ChevronDown, ChevronUp, Upload, BarChart3, 
-  Eye, EyeOff, Grid3X3, ZoomIn, ZoomOut, Share2
+  Eye, EyeOff, Grid3X3, ZoomIn, ZoomOut, Share2, Info
 } from 'lucide-react';
+import { throttle } from './utils/performance';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { toPng } from 'html-to-image';
 import { AccelerationTable } from './components/AccelerationTable';
 import { AccelerationChart } from './components/AccelerationChart';
 import { ScatterPlot } from './components/ScatterPlot';
+import { FloatingDataPanel } from './components/FloatingDataPanel';
 import { i18n } from './i18n';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+// Vertical cursor line plugin for chart hover - optimized for performance
+const verticalCursorPlugin = {
+  id: 'verticalCursor',
+  afterInit: (chart: any) => {
+    chart.verticalCursor = { x: null, visible: false, lastX: null };
+  },
+  afterEvent: (chart: any, args: any) => {
+    const { event } = args;
+    if (event.type === 'mousemove') {
+      const points = chart.getElementsAtEventForMode(event, 'index', { intersect: false }, true);
+      if (points.length) {
+        const newX = points[0].element.x;
+        // Only update if position changed significantly (>2px)
+        if (Math.abs(newX - (chart.verticalCursor.lastX || 0)) > 2) {
+          chart.verticalCursor.x = newX;
+          chart.verticalCursor.lastX = newX;
+          chart.verticalCursor.visible = true;
+          chart.draw('none'); // Use 'none' mode for better performance
+        }
+      }
+    } else if (event.type === 'mouseout') {
+      chart.verticalCursor.visible = false;
+      chart.draw('none');
+    }
+  },
+  afterDraw: (chart: any) => {
+    if (!chart.verticalCursor.visible || chart.verticalCursor.x === null) return;
+    
+    const ctx = chart.ctx;
+    const { top, bottom } = chart.chartArea;
+    const x = chart.verticalCursor.x;
+    
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
 
 ChartJS.register(
   CategoryScale,
@@ -41,14 +87,24 @@ ChartJS.register(
   Tooltip,
   Legend,
   TimeScale,
-  Filler
+  Filler,
+  verticalCursorPlugin
 );
 
 // Modern gradient stat card component
-const StatCard = ({ title, value, icon: Icon, unit, gradient, delay = 0 }: any) => (
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  unit?: string;
+  gradient: { from: string; to: string };
+  delay?: number;
+}
+
+const StatCard = memo(({ title, value, icon: Icon, unit, gradient, delay = 0 }: StatCardProps) => (
   <div 
     className={cn(
-      "relative overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:scale-105 hover:shadow-2xl group",
+      "relative overflow-hidden rounded-xl p-5 transition-all duration-300 hover:scale-105 hover:shadow-lg group",
       "bg-gradient-to-br border border-white/10 backdrop-blur-sm"
     )}
     style={{ 
@@ -68,11 +124,18 @@ const StatCard = ({ title, value, icon: Icon, unit, gradient, delay = 0 }: any) 
       <p className="text-3xl font-bold text-white tracking-tight">{value}</p>
     </div>
   </div>
-);
+));
 
 // Modern toggle chip
-const ToggleChip = ({ label, active, onClick, color = "blue" }: any) => {
-  const colorMap: any = {
+interface ToggleChipProps {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  color?: 'blue' | 'green' | 'purple' | 'orange' | 'pink';
+}
+
+const ToggleChip = memo(({ label, active, onClick, color = "blue" }: ToggleChipProps) => {
+  const colorMap: Record<string, string> = {
     blue: "bg-blue-500/20 border-blue-500/30 text-blue-300",
     green: "bg-emerald-500/20 border-emerald-500/30 text-emerald-300",
     purple: "bg-purple-500/20 border-purple-500/30 text-purple-300",
@@ -80,7 +143,7 @@ const ToggleChip = ({ label, active, onClick, color = "blue" }: any) => {
     pink: "bg-pink-500/20 border-pink-500/30 text-pink-300",
   };
   
-  const activeMap: any = {
+  const activeMap: Record<string, string> = {
     blue: "bg-blue-500 border-blue-400 text-white",
     green: "bg-emerald-500 border-emerald-400 text-white",
     purple: "bg-purple-500 border-purple-400 text-white",
@@ -92,7 +155,7 @@ const ToggleChip = ({ label, active, onClick, color = "blue" }: any) => {
     <button
       onClick={onClick}
       className={cn(
-        "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 border flex items-center gap-1.5",
+        "px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 border flex items-center gap-1.5",
         active ? activeMap[color] : colorMap[color],
         "hover:opacity-80"
       )}
@@ -101,7 +164,7 @@ const ToggleChip = ({ label, active, onClick, color = "blue" }: any) => {
       {label}
     </button>
   );
-};
+});
 
 function App() {
   const [data, setData] = useState<TripEntry[]>([]);
@@ -148,6 +211,9 @@ function App() {
     pwm: true,
   });
 
+  // Chart snap mode toggle - snaps cursor to nearest data point
+  const [chartSnapMode, setChartSnapMode] = useState<boolean>(false);
+
   // Acceleration thresholds
   const [thresholds, setThresholds] = useState<SpeedThreshold[]>([
     { id: 't25', label: '0-25', value: 25 },
@@ -160,7 +226,6 @@ function App() {
   // Chart zoom & pan state
   const [chartZoom, setChartZoom] = useState<{ min: number; max: number } | null>(null);
   const [chartView, setChartView] = useState<'line' | 'scatter'>('line');
-  const chartRef = useRef<any>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
   // Pan state
@@ -170,7 +235,14 @@ function App() {
   // Panels visibility
   const [showSettings, setShowSettings] = useState(false);
 
-  // Data filter state
+  // Floating data panel state
+  const [showFloatingPanel, setShowFloatingPanel] = useState<boolean>(false);
+  const [floatingPanelFrozen, setFloatingPanelFrozen] = useState<boolean>(false);
+  const [floatingPanelPosition, setFloatingPanelPosition] = useState<{ x: number; y: number }>({ x: 100, y: 100 });
+  const [floatingPanelData, setFloatingPanelData] = useState<{ label: string; value: number | null; color: string; unit?: string }[]>([]);
+  const [floatingPanelTimestamp, setFloatingPanelTimestamp] = useState<string>('');
+  const floatingPanelDataRef = useRef(floatingPanelData);
+  floatingPanelDataRef.current = floatingPanelData;
   const [filterConfig, setFilterConfig] = useState<DataFilterConfig>(defaultFilterConfig);
   const [hideIdlePeriods, setHideIdlePeriods] = useState<boolean>(false);
 
@@ -221,6 +293,49 @@ function App() {
     return filtered;
   }, [data, timeRange, filterConfig, hideIdlePeriods]);
 
+  // Compute active periods (non-idle segments) for collapsed timeline view
+  const activePeriods = useMemo(() => {
+    if (!hideIdlePeriods || filteredData.length === 0) return null;
+    
+    const periods: { start: number; end: number }[] = [];
+    let currentStart: number | null = null;
+    
+    for (let i = 0; i < filteredData.length; i++) {
+      const entry = filteredData[i];
+      const prevEntry = i > 0 ? filteredData[i - 1] : null;
+      
+      // Start of a new period
+      if (currentStart === null) {
+        currentStart = entry.timestamp;
+      }
+      
+      // Check if there's a gap (idle period was removed)
+      if (prevEntry && entry.timestamp - prevEntry.timestamp > 5000) { // 5 second gap threshold
+        periods.push({ start: currentStart, end: prevEntry.timestamp });
+        currentStart = entry.timestamp;
+      }
+    }
+    
+    // Close the last period
+    if (currentStart !== null && filteredData.length > 0) {
+      periods.push({ start: currentStart, end: filteredData[filteredData.length - 1].timestamp });
+    }
+    
+    return periods;
+  }, [filteredData, hideIdlePeriods]);
+
+  // Calculate collapsed timeline range (total active time only)
+  const collapsedTimeRange = useMemo(() => {
+    if (!hideIdlePeriods || !activePeriods || activePeriods.length === 0) return null;
+    
+    const totalActiveDuration = activePeriods.reduce((sum, p) => sum + (p.end - p.start), 0);
+    return {
+      start: 0,
+      end: totalActiveDuration,
+      periods: activePeriods,
+    };
+  }, [activePeriods, hideIdlePeriods]);
+
   // Recompute summary for filtered data
   const filteredSummary = useMemo(() => {
     if (filteredData.length === 0) return null;
@@ -244,8 +359,11 @@ function App() {
     }
   }, [data, timeRange]);
 
-  // Optimized data for charts to prevent UI lag with large logs
-  const displayData = useMemo(() => downsample(filteredData, 1500), [filteredData]);
+  // Optimized data for charts - aggressive downsampling for performance
+  const displayData = useMemo(() => {
+    const currentTimeRange = chartZoom ? { start: chartZoom.min, end: chartZoom.max } : timeRange;
+    return downsample(filteredData, 500, currentTimeRange);
+  }, [filteredData, chartZoom, timeRange]);
 
   // Interactive chart handlers
   const handleChartMouseDown = useCallback((e: React.MouseEvent) => {
@@ -509,9 +627,44 @@ function App() {
     touchState.current.initialZoom = null;
   }, []);
 
-  const handleChartDoubleClick = useCallback(() => {
-    resetZoom();
-  }, [resetZoom]);
+  const handleChartDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (!timeRange || !chartContainerRef.current) return;
+    
+    const canvas = chartContainerRef.current.querySelector('canvas');
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseRatio = mouseX / rect.width;
+    
+    const currentMin = chartZoom?.min ?? timeRange.start;
+    const currentMax = chartZoom?.max ?? timeRange.end;
+    
+    // Zoom in by 2x centered on click point
+    const zoomFactor = 0.5;
+    const mouseTime = currentMin + (currentMax - currentMin) * mouseRatio;
+    let newMin = mouseTime - (mouseTime - currentMin) * zoomFactor;
+    let newMax = mouseTime + (currentMax - mouseTime) * zoomFactor;
+    
+    // Clamp to time range bounds
+    if (newMin < timeRange.start) {
+      newMax += (timeRange.start - newMin);
+      newMin = timeRange.start;
+    }
+    if (newMax > timeRange.end) {
+      newMin -= (newMax - timeRange.end);
+      newMax = timeRange.end;
+    }
+    
+    // Min range 1 second
+    if (newMax - newMin < 1000) {
+      const c = (newMin + newMax) / 2;
+      newMin = c - 500;
+      newMax = c + 500;
+    }
+    
+    setChartZoom({ min: newMin, max: newMax });
+  }, [timeRange, chartZoom]);
 
   // Shift + Scroll zoom handler
   const handleChartWheel = useCallback((e: React.WheelEvent) => {
@@ -614,50 +767,72 @@ function App() {
     if (file) handleFile(file);
   };
 
-  const commonOptions: ChartOptions<'line'> = {
+  // Common chart options for maximum performance
+  const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    scales: {
-      x: {
-        type: 'time',
-        time: {
-          unit: 'minute',
-          displayFormats: {
-            minute: 'HH:mm'
-          }
-        },
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: 'rgba(255, 255, 255, 0.5)' }
-      },
-      y: {
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: 'rgba(255, 255, 255, 0.5)' }
-      }
-    },
-    plugins: {
-      legend: {
-        position: 'top' as const,
-        labels: { color: 'rgba(255, 255, 255, 0.7)', usePointStyle: true }
-      },
-      tooltip: {
-        mode: 'index',
-        intersect: false,
-      }
+    animation: false,
+    transitions: {
+      active: { animation: { duration: 0 } },
+      resize: { animation: { duration: 0 } },
+      show: { animation: { duration: 0 } },
+      hide: { animation: { duration: 0 } }
     },
     elements: {
-        line: { borderWidth: 2 },
-        point: { radius: 0, hoverRadius: 5 }
+      line: { borderWidth: 2, spanGaps: true },
+      point: { radius: 0, hoverRadius: 4, hitRadius: 8 }
+    },
+    parsing: false,
+    normalized: true,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+      axis: 'x'
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        enabled: false // Disable built-in tooltip for performance
+      }
     }
   };
 
-  // Combined chart data with toggles
+  // Optimized chart data generation with individual memoization for each dataset
+  // Prevents recreating arrays when toggles change
+  const chartDatasets = useMemo(() => {
+    const datasets: Record<string, Array<{ x: number; y: number | null }>> = {
+      speed: displayData.map(e => ({ x: e.timestamp, y: e.Speed })),
+      gpsSpeed: displayData.map(e => ({ x: e.timestamp, y: e.GPSSpeed })),
+      power: displayData.map(e => ({ x: e.timestamp, y: e.Power ?? null })),
+      current: displayData.map(e => ({ x: e.timestamp, y: e.Current ?? null })),
+      phaseCurrent: displayData.map(e => ({ x: e.timestamp, y: e.PhaseCurrent ?? null })),
+      voltage: displayData.map(e => ({ x: e.timestamp, y: e.Voltage })),
+      batteryLevel: displayData.map(e => ({ x: e.timestamp, y: e.BatteryLevel })),
+      temperature: displayData.map(e => ({ x: e.timestamp, y: e.Temperature })),
+      temp2: displayData.map(e => ({ x: e.timestamp, y: e.Temp2 ?? null })),
+      torque: displayData.map(e => ({ x: e.timestamp, y: e.Torque ?? null })),
+      pwm: displayData.map(e => ({ x: e.timestamp, y: e.PWM })),
+    };
+    return datasets;
+  }, [displayData]);
+
+  // Combined chart data with toggles - only constructs final datasets object
   const combinedChartData = useMemo(() => {
-    const datasets: any[] = [];
+    const datasets: Array<{
+      label: string;
+      data: Array<{ x: number; y: number | null | undefined }>;
+      borderColor: string;
+      backgroundColor?: string;
+      fill?: boolean;
+      tension?: number;
+      yAxisID?: string;
+      borderDash?: number[];
+    }> = [];
 
     if (chartToggles.speed) {
       datasets.push({
         label: 'Speed (km/h)',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.Speed })),
+        data: chartDatasets.speed,
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         fill: true,
@@ -669,7 +844,7 @@ function App() {
     if (chartToggles.gpsSpeed) {
       datasets.push({
         label: 'GPS Speed (km/h)',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.GPSSpeed })),
+        data: chartDatasets.gpsSpeed,
         borderColor: '#10b981',
         tension: 0.1,
         borderDash: [5, 5],
@@ -680,7 +855,7 @@ function App() {
     if (chartToggles.power) {
       datasets.push({
         label: 'Power (W)',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.Power })),
+        data: chartDatasets.power,
         borderColor: '#f59e0b',
         tension: 0.1,
         yAxisID: 'y1',
@@ -690,7 +865,7 @@ function App() {
     if (chartToggles.current) {
       datasets.push({
         label: 'Current (A)',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.Current })),
+        data: chartDatasets.current,
         borderColor: '#ef4444',
         tension: 0.1,
         yAxisID: 'y2',
@@ -700,7 +875,7 @@ function App() {
     if (chartToggles.phaseCurrent && displayData[0]?.PhaseCurrent !== undefined) {
       datasets.push({
         label: 'Phase Current (A)',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.PhaseCurrent })),
+        data: chartDatasets.phaseCurrent,
         borderColor: '#f87171',
         tension: 0.1,
         borderDash: [2, 2],
@@ -711,7 +886,7 @@ function App() {
     if (chartToggles.voltage) {
       datasets.push({
         label: 'Voltage (V)',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.Voltage })),
+        data: chartDatasets.voltage,
         borderColor: '#8b5cf6',
         tension: 0.1,
         yAxisID: 'y',
@@ -721,7 +896,7 @@ function App() {
     if (chartToggles.batteryLevel) {
       datasets.push({
         label: 'Battery %',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.BatteryLevel })),
+        data: chartDatasets.batteryLevel,
         borderColor: '#ec4899',
         tension: 0.1,
         yAxisID: 'y3',
@@ -731,7 +906,7 @@ function App() {
     if (chartToggles.temperature) {
       datasets.push({
         label: 'Temperature (°C)',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.Temperature })),
+        data: chartDatasets.temperature,
         borderColor: '#f97316',
         tension: 0.1,
         yAxisID: 'y',
@@ -741,7 +916,7 @@ function App() {
     if (chartToggles.temp2 && displayData[0]?.Temp2 !== undefined) {
       datasets.push({
         label: 'Temp 2 (°C)',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.Temp2 })),
+        data: chartDatasets.temp2,
         borderColor: '#fb923c',
         tension: 0.1,
         borderDash: [3, 3],
@@ -752,7 +927,7 @@ function App() {
     if (chartToggles.torque && displayData[0]?.Torque !== undefined) {
       datasets.push({
         label: 'Torque',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.Torque })),
+        data: chartDatasets.torque,
         borderColor: '#a78bfa',
         tension: 0.1,
         yAxisID: 'y4',
@@ -762,7 +937,7 @@ function App() {
     if (chartToggles.pwm) {
       datasets.push({
         label: 'PWM',
-        data: displayData.map(e => ({ x: e.timestamp, y: e.PWM })),
+        data: chartDatasets.pwm,
         borderColor: '#06b6d4',
         tension: 0.1,
         borderDash: [4, 4],
@@ -780,114 +955,97 @@ function App() {
     return `${hours}h ${minutes}m`;
   };
 
-  // Export stats as PNG image
+  // Export full page as PNG image using html-to-image
   const handleShareStats = async () => {
-    if (!filteredSummary) return;
-    
-    // Create a canvas element
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Set canvas size
-    canvas.width = 1200;
-    canvas.height = 800;
-    
-    // Fill background
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add gradient overlay
-    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#1e293b');
-    gradient.addColorStop(1, '#0f172a');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Title
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 32px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Trip Log Statistics', canvas.width / 2, 60);
-    
-    // Filename
-    ctx.font = '18px system-ui, sans-serif';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText(fileName || 'Unknown file', canvas.width / 2, 90);
-    
-    // Stats data
-    const stats = [
-      { label: 'Max Speed', value: `${filteredSummary.maxSpeed.toFixed(1)} km/h`, color: '#3b82f6' },
-      { label: 'Distance', value: `${filteredSummary.totalDistance.toFixed(2)} km`, color: '#10b981' },
-      { label: 'Max Power', value: `${filteredSummary.maxPower.toFixed(0)} W`, color: '#f59e0b' },
-      { label: 'Riding Time', value: formatDuration(filteredSummary.movingDuration), color: '#06b6d4' },
-      { label: 'Avg Speed', value: `${filteredSummary.avgSpeed.toFixed(1)} km/h`, color: '#6366f1' },
-      { label: 'Avg Moving', value: `${filteredSummary.avgMovingSpeed.toFixed(1)} km/h`, color: '#8b5cf6' },
-    ];
-    
-    if (filteredSummary.batteryVoltageDrop !== undefined) {
-      stats.push({ label: 'Voltage Drop', value: `${filteredSummary.batteryVoltageDrop.toFixed(1)} V`, color: '#ec4899' });
+    if (!data.length) {
+      alert('Нет данных для сохранения. Загрузите CSV файл.');
+      return;
     }
     
-    if (filteredSummary.maxTorque !== undefined && filteredSummary.maxTorque > 0) {
-      stats.push({ label: 'Max Torque', value: filteredSummary.maxTorque.toFixed(2), color: '#a855f7' });
+    // Find the main content container
+    const element = document.querySelector('[data-export-container]') as HTMLElement || 
+                   document.querySelector('.relative.z-10') as HTMLElement;
+    if (!element) {
+      alert('Не найден контейнер для экспорта');
+      return;
     }
     
-    // Draw stat cards
-    const cardWidth = 300;
-    const cardHeight = 100;
-    const startX = 150;
-    const startY = 140;
-    const gapX = 50;
-    const gapY = 30;
+    // Show loading indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'screenshot-loading';
+    loadingDiv.innerHTML = `
+      <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+        <div style="background:rgba(15,23,42,0.95);padding:24px 40px;border-radius:16px;border:1px solid rgba(59,130,246,0.3);text-align:center;">
+          <div style="width:48px;height:48px;border:4px solid rgba(59,130,246,0.2);border-top-color:#3b82f6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px;"></div>
+          <p style="color:#fff;font-family:system-ui,sans-serif;font-size:14px;margin:0;">Создание скриншота...</p>
+          <p style="color:#64748b;font-family:system-ui,sans-serif;font-size:12px;margin:8px 0 0;">Это может занять несколько секунд</p>
+        </div>
+      </div>
+      <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+    `;
+    document.body.appendChild(loadingDiv);
     
-    stats.forEach((stat, index) => {
-      const row = Math.floor(index / 3);
-      const col = index % 3;
-      const x = startX + col * (cardWidth + gapX);
-      const y = startY + row * (cardHeight + gapY);
-      
-      // Card background
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(x, y, cardWidth, cardHeight, 16);
-      ctx.fill();
-      ctx.stroke();
-      
-      // Gradient accent
-      const cardGradient = ctx.createLinearGradient(x, y, x + cardWidth, y + cardHeight);
-      cardGradient.addColorStop(0, stat.color + '33');
-      cardGradient.addColorStop(1, stat.color + '11');
-      ctx.fillStyle = cardGradient;
-      ctx.beginPath();
-      ctx.roundRect(x, y, cardWidth, cardHeight, 16);
-      ctx.fill();
-      
-      // Label
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '14px system-ui, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(stat.label.toUpperCase(), x + 20, y + 30);
-      
-      // Value
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 28px system-ui, sans-serif';
-      ctx.fillText(stat.value, x + 20, y + 65);
-    });
+    // Store original styles
+    const originalMaxWidth = element.style.maxWidth;
+    const originalWidth = element.style.width;
     
-    // Footer
-    ctx.fillStyle = '#475569';
-    ctx.font = '14px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Generated by Trip Log Analyzer', canvas.width / 2, canvas.height - 40);
-    
-    // Download
-    const link = document.createElement('a');
-    link.download = `trip-stats-${fileName.replace('.csv', '') || 'export'}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    try {
+      // Wait for UI to settle
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Temporarily remove max-width constraint to capture full content
+      element.style.maxWidth = 'none';
+      element.style.width = 'auto';
+      
+      // Force layout recalculation
+      element.getBoundingClientRect();
+      
+      const dataUrl = await toPng(element, {
+        quality: 0.95,
+        pixelRatio: 1.5,
+        backgroundColor: '#0f172a',
+        skipFonts: false,
+        cacheBust: true,
+        style: {
+          transform: 'none',
+          maxHeight: 'none',
+          maxWidth: 'none',
+          overflow: 'visible',
+          width: 'auto'
+        },
+        // Ensure we capture the full scrollable width
+        width: element.scrollWidth,
+        height: element.scrollHeight
+      });
+      
+      // Restore original styles
+      element.style.maxWidth = originalMaxWidth;
+      element.style.width = originalWidth;
+      
+      // Create download
+      const link = document.createElement('a');
+      const cleanFileName = fileName.replace(/\.csv$/i, '').replace(/[^a-z0-9а-яё_-]/gi, '_') || 'trip';
+      const date = new Date().toISOString().slice(0, 10);
+      link.download = `trip-log-${cleanFileName}-${date}.png`;
+      link.href = dataUrl;
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+    } catch (error) {
+      console.error('Screenshot failed:', error);
+      alert('Ошибка создания скриншота: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка'));
+      // Restore original styles on error
+      element.style.maxWidth = originalMaxWidth;
+      element.style.width = originalWidth;
+    } finally {
+      const loading = document.getElementById('screenshot-loading');
+      if (loading) {
+        document.body.removeChild(loading);
+      }
+    }
   };
 
   return (
@@ -903,7 +1061,7 @@ function App() {
       {/* Background pattern */}
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent pointer-events-none" />
       
-      <div className="relative z-10 max-w-[1600px] mx-auto px-6 py-8" onDragOver={onDragOver}>
+      <div data-export-container className="relative z-10 max-w-[1600px] mx-auto px-6 py-8" onDragOver={onDragOver}>
         {/* Modern Header */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div className="flex items-center gap-4">
@@ -925,7 +1083,7 @@ function App() {
           </div>
           
           <label className={cn(
-            "group flex items-center gap-3 px-6 py-3 rounded-xl cursor-pointer transition-all duration-300",
+            "group flex items-center gap-3 px-5 py-3 rounded-xl cursor-pointer transition-all duration-300",
             "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400",
             "shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30",
             "hover:scale-105 active:scale-95"
@@ -939,7 +1097,7 @@ function App() {
         {/* Drag overlay */}
         {isDragging && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-blue-600/20 backdrop-blur-sm pointer-events-none">
-            <div className="text-center bg-slate-900/95 p-12 rounded-3xl shadow-2xl border-2 border-dashed border-blue-500/50 animate-pulse">
+            <div className="text-center bg-slate-900/95 p-10 rounded-2xl shadow-2xl border-2 border-dashed border-blue-500/50 animate-pulse">
               <Upload className="w-20 h-20 mx-auto mb-6 text-blue-400" strokeWidth={1.5} />
               <p className="text-3xl font-bold text-white mb-2">{i18n.t('dropCSV')}</p>
               <p className="text-blue-400/80">{i18n.t('dropCSVSubtitle')}</p>
@@ -977,202 +1135,412 @@ function App() {
 
             {/* Settings Panel */}
             {showSettings && (
-              <div className="bg-white/5 backdrop-blur-xl p-6 rounded-2xl border border-white/10 mb-6">
-                <h3 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wider flex items-center gap-2">
-                  <Grid3X3 className="w-4 h-4" />
-                  {i18n.t('visibleMetrics')}
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {Object.entries(visibleMetrics).map(([key, value]) => (
-                    <button
-                      key={key}
-                      onClick={() => setVisibleMetrics(prev => ({ ...prev, [key]: !prev[key] }))}
-                      className={cn(
-                        "px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 border flex items-center justify-center gap-2",
-                        value 
-                          ? "bg-blue-500/20 border-blue-500/50 text-blue-300" 
-                          : "bg-white/5 border-white/10 text-slate-500 hover:text-slate-300"
-                      )}
-                    >
-                      {value ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                    </button>
-                  ))}
+              <div className="bg-white/5 backdrop-blur-xl p-5 rounded-xl border border-white/10 mb-6 space-y-6">
+                {/* Visible Metrics */}
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <Grid3X3 className="w-4 h-4" />
+                    {i18n.t('visibleMetrics')}
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {Object.entries(visibleMetrics).map(([key, value]) => (
+                      <button
+                        key={key}
+                        onClick={() => setVisibleMetrics(prev => ({ ...prev, [key]: !prev[key] }))}
+                        className={cn(
+                          "px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 border flex items-center justify-center gap-2",
+                          value 
+                            ? "bg-blue-500/20 border-blue-500/50 text-blue-300" 
+                            : "bg-white/5 border-white/10 text-slate-500 hover:text-slate-300"
+                        )}
+                      >
+                        {value ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                        <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Filter Configuration */}
+                <div className="border-t border-white/10 pt-6">
+                  <h3 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-amber-400" />
+                    Настройки фильтра данных
+                  </h3>
+                  
+                  {/* Time Gap */}
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs text-slate-400">Разрыв времени (паузы)</label>
+                      <span className="text-xs text-amber-400 font-medium">{filterConfig.maxTimeGapSeconds} сек</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="60"
+                      value={filterConfig.maxTimeGapSeconds}
+                      onChange={(e) => setFilterConfig(prev => ({ ...prev, maxTimeGapSeconds: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Точки с паузой {'>'} этого значения будут удалены</p>
+                  </div>
+
+                  {/* GPS Teleportation */}
+                  <div className="mb-4 grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs text-slate-400">GPS скорость лимит</label>
+                        <span className="text-xs text-red-400 font-medium">{filterConfig.gpsTeleportSpeedKmh} км/ч</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="100"
+                        max="500"
+                        step="10"
+                        value={filterConfig.gpsTeleportSpeedKmh}
+                        onChange={(e) => setFilterConfig(prev => ({ ...prev, gpsTeleportSpeedKmh: parseInt(e.target.value) }))}
+                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs text-slate-400">GPS дистанция лимит</label>
+                        <span className="text-xs text-red-400 font-medium">{filterConfig.gpsTeleportDistanceM} м</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="100"
+                        max="2000"
+                        step="50"
+                        value={filterConfig.gpsTeleportDistanceM}
+                        onChange={(e) => setFilterConfig(prev => ({ ...prev, gpsTeleportDistanceM: parseInt(e.target.value) }))}
+                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stuck GPS */}
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs text-slate-400">Застрявший GPS (точки)</label>
+                      <span className="text-xs text-yellow-400 font-medium">{filterConfig.stuckGpsPoints} точек</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="3"
+                      max="50"
+                      value={filterConfig.stuckGpsPoints}
+                      onChange={(e) => setFilterConfig(prev => ({ ...prev, stuckGpsPoints: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-yellow-500"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Сигнал если {'>'} точек с одинаковыми координатами</p>
+                  </div>
+
+                  {/* Value Limits */}
+                  <div className="mb-4 grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs text-slate-400">Max Speed</label>
+                        <span className="text-xs text-blue-400 font-medium">{filterConfig.limits.Speed.max} км/ч</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="100"
+                        max="400"
+                        step="10"
+                        value={filterConfig.limits.Speed.max}
+                        onChange={(e) => setFilterConfig(prev => ({ 
+                          ...prev, 
+                          limits: { ...prev.limits, Speed: { ...prev.limits.Speed, max: parseInt(e.target.value) } }
+                        }))}
+                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs text-slate-400">Max Voltage</label>
+                        <span className="text-xs text-blue-400 font-medium">{filterConfig.limits.Voltage.max} V</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="100"
+                        max="400"
+                        step="5"
+                        value={filterConfig.limits.Voltage.max}
+                        onChange={(e) => setFilterConfig(prev => ({ 
+                          ...prev, 
+                          limits: { ...prev.limits, Voltage: { ...prev.limits.Voltage, max: parseInt(e.target.value) } }
+                        }))}
+                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Reset Button */}
+                  <button
+                    onClick={() => setFilterConfig(defaultFilterConfig)}
+                    className="text-xs text-slate-400 hover:text-white underline transition-colors"
+                  >
+                    Сбросить настройки фильтра
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* Summary cards - Modern gradient design */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
-              {visibleMetrics.maxSpeed && filteredSummary!.maxSpeed > 0 && (
-                <StatCard 
-                  title={i18n.t('maxSpeed')} 
-                  value={filteredSummary!.maxSpeed.toFixed(1)} 
-                  unit="km/h" 
-                  icon={Gauge} 
-                  gradient={{ from: '#3b82f6', to: '#8b5cf6' }}
-                />
-              )}
-              {visibleMetrics.distance && filteredSummary!.totalDistance > 0 && (
-                <StatCard 
-                  title={i18n.t('distance')} 
-                  value={filteredSummary!.totalDistance.toFixed(2)} 
-                  unit="km" 
-                  icon={TrendingUp} 
-                  gradient={{ from: '#10b981', to: '#3b82f6' }}
-                />
-              )}
-              {visibleMetrics.maxPower && filteredSummary!.maxPower > 0 && (
-                <StatCard 
-                  title={i18n.t('maxPower')} 
-                  value={filteredSummary!.maxPower.toFixed(0)} 
-                  unit="W" 
-                  icon={Zap} 
-                  gradient={{ from: '#f59e0b', to: '#ef4444' }}
-                />
-              )}
-              {visibleMetrics.batteryDrop && (
-                <StatCard 
-                  title={i18n.t('batteryDrop')} 
-                  value={filteredSummary!.batteryDrop} 
-                  unit="%" 
-                  icon={Battery} 
-                  gradient={{ from: '#ec4899', to: '#f43f5e' }}
-                />
-              )}
-              {visibleMetrics.maxBatteryDrop && filteredSummary!.maxBatteryDrop !== undefined && filteredSummary!.maxBatteryDrop > 0 && (
-                <StatCard 
-                  title={i18n.t('maxBatteryDrop')} 
-                  value={filteredSummary!.maxBatteryDrop.toFixed(1)} 
-                  unit="%" 
-                  icon={Battery} 
-                  gradient={{ from: '#f43f5e', to: '#e11d48' }}
-                />
-              )}
-              {visibleMetrics.avgTemp && filteredSummary!.avgTemp !== undefined && filteredSummary!.avgTemp > 0 && (
-                <StatCard 
-                  title={i18n.t('avgTemp')} 
-                  value={filteredSummary!.avgTemp.toFixed(1)} 
-                  unit="°C" 
-                  icon={Thermometer} 
-                  gradient={{ from: '#f97316', to: '#ea580c' }}
-                />
-              )}
-              {visibleMetrics.maxTemp && filteredSummary!.maxTemp !== undefined && filteredSummary!.maxTemp > 0 && (
-                <StatCard 
-                  title={i18n.t('maxTemp')} 
-                  value={filteredSummary!.maxTemp.toFixed(1)} 
-                  unit="°C" 
-                  icon={Thermometer} 
-                  gradient={{ from: '#ef4444', to: '#dc2626' }}
-                />
-              )}
-              {visibleMetrics.duration && filteredSummary!.duration > 0 && (
-                <StatCard 
-                  title={i18n.t('duration')} 
-                  value={formatDuration(filteredSummary!.duration)} 
-                  unit="" 
-                  icon={Clock} 
-                  gradient={{ from: '#6366f1', to: '#4f46e5' }}
-                />
-              )}
-              {visibleMetrics.ridingTime && filteredSummary!.movingDuration > 0 && (
-                <StatCard 
-                  title={i18n.t('ridingTime')} 
-                  value={formatDuration(filteredSummary!.movingDuration)} 
-                  unit="" 
-                  icon={Clock} 
-                  gradient={{ from: '#06b6d4', to: '#0891b2' }}
-                />
-              )}
-              {visibleMetrics.avgSpeed && filteredSummary!.avgSpeed > 0 && (
-                <StatCard 
-                  title={i18n.t('avgSpeed')} 
-                  value={filteredSummary!.avgSpeed.toFixed(1)} 
-                  unit="km/h" 
-                  icon={Gauge} 
-                  gradient={{ from: '#3b82f6', to: '#6366f1' }}
-                />
-              )}
-              {visibleMetrics.avgMovingSpeed && filteredSummary!.avgMovingSpeed > 0 && (
-                <StatCard 
-                  title={i18n.t('avgMovingSpeed')} 
-                  value={filteredSummary!.avgMovingSpeed.toFixed(1)} 
-                  unit="km/h" 
-                  icon={Gauge} 
-                  gradient={{ from: '#6366f1', to: '#8b5cf6' }}
-                />
-              )}
-              {visibleMetrics.totalSamples && (
-                <StatCard 
-                  title={i18n.t('totalSamples')} 
-                  value={filteredData.length.toLocaleString()} 
-                  unit="" 
-                  icon={Activity} 
-                  gradient={{ from: '#64748b', to: '#475569' }}
-                />
-              )}
-              {/* Peak accelerations with time */}
-              {visibleMetrics.peakAcceleration && (
-                <div className={cn(
-                  "relative overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:scale-105 hover:shadow-2xl group",
-                  "bg-gradient-to-br border border-white/10 backdrop-blur-sm"
-                )}
-                style={{ 
-                  backgroundImage: 'linear-gradient(to bottom right, rgba(139, 92, 246, 0.2), rgba(124, 58, 237, 0.3))',
-                }}
-                >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16 group-hover:scale-150 transition-transform duration-500" />
-                  <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-sm">
-                        <Rocket className="w-5 h-5 text-white" />
-                      </div>
-                      <span className="text-xs text-white/60 font-medium">{i18n.t('peakAcceleration')}</span>
-                    </div>
-                    <div className="space-y-2">
-                      {thresholds.slice(0, 4).map((t) => {
-                        const result = accelerationResults[t.id];
-                        if (!result?.bestRun) return null;
-                        const timeStr = result.time !== null 
-                          ? (result.time < 1 ? `${(result.time * 1000).toFixed(0)} мс` : `${result.time.toFixed(2)} с`)
-                          : '—';
-                        return (
-                          <div key={t.id} className="flex items-center justify-between text-sm border-b border-white/5 pb-1 last:border-0 last:pb-0">
-                            <span className="text-white/70">{t.label}:</span>
-                            <div className="text-right">
-                              <span className="font-bold text-white">{result.bestRun.peakAcceleration.toFixed(2)} м/с²</span>
-                              <span className="text-white/50 text-xs ml-2">({timeStr})</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+            {/* Summary cards - Grouped by category in compact boxes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+              
+              {/* Speed Box */}
+              {(visibleMetrics.maxSpeed || visibleMetrics.avgSpeed || visibleMetrics.avgMovingSpeed) && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                  <h3 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Gauge className="w-4 h-4" />
+                    Скорость
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {visibleMetrics.maxSpeed && filteredSummary!.maxSpeed > 0 && (
+                      <StatCard 
+                        title={i18n.t('maxSpeed')} 
+                        value={filteredSummary!.maxSpeed.toFixed(1)} 
+                        unit="km/h" 
+                        icon={Gauge} 
+                        gradient={{ from: '#3b82f6', to: '#8b5cf6' }}
+                      />
+                    )}
+                    {visibleMetrics.avgSpeed && filteredSummary!.avgSpeed > 0 && (
+                      <StatCard 
+                        title={i18n.t('avgSpeed')} 
+                        value={filteredSummary!.avgSpeed.toFixed(1)} 
+                        unit="km/h" 
+                        icon={Gauge} 
+                        gradient={{ from: '#3b82f6', to: '#6366f1' }}
+                      />
+                    )}
+                    {visibleMetrics.avgMovingSpeed && filteredSummary!.avgMovingSpeed > 0 && (
+                      <StatCard 
+                        title={i18n.t('avgMovingSpeed')} 
+                        value={filteredSummary!.avgMovingSpeed.toFixed(1)} 
+                        unit="km/h" 
+                        icon={Gauge} 
+                        gradient={{ from: '#6366f1', to: '#8b5cf6' }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
-              {visibleMetrics.maxTorque && filteredSummary!.maxTorque !== undefined && filteredSummary!.maxTorque > 0 && (
-                <StatCard 
-                  title={i18n.t('maxTorque')} 
-                  value={filteredSummary!.maxTorque.toFixed(2)} 
-                  unit="" 
-                  icon={Zap} 
-                  gradient={{ from: '#a855f7', to: '#9333ea' }}
-                />
+
+              {/* Distance & Time Box */}
+              {(visibleMetrics.distance || visibleMetrics.duration || visibleMetrics.ridingTime) && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                  <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4" />
+                    Дистанция и время
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {visibleMetrics.distance && filteredSummary!.totalDistance > 0 && (
+                      <StatCard 
+                        title={i18n.t('distance')} 
+                        value={filteredSummary!.totalDistance.toFixed(2)} 
+                        unit="km" 
+                        icon={TrendingUp} 
+                        gradient={{ from: '#10b981', to: '#3b82f6' }}
+                      />
+                    )}
+                    {visibleMetrics.duration && filteredSummary!.duration > 0 && (
+                      <StatCard 
+                        title={i18n.t('duration')} 
+                        value={formatDuration(filteredSummary!.duration)} 
+                        unit="" 
+                        icon={Clock} 
+                        gradient={{ from: '#6366f1', to: '#4f46e5' }}
+                      />
+                    )}
+                    {visibleMetrics.ridingTime && filteredSummary!.movingDuration > 0 && (
+                      <StatCard 
+                        title={i18n.t('ridingTime')} 
+                        value={formatDuration(filteredSummary!.movingDuration)} 
+                        unit="" 
+                        icon={Clock} 
+                        gradient={{ from: '#06b6d4', to: '#0891b2' }}
+                      />
+                    )}
+                  </div>
+                </div>
               )}
-              {visibleMetrics.maxPhaseCurrent && filteredSummary!.maxPhaseCurrent !== undefined && filteredSummary!.maxPhaseCurrent > 0 && (
-                <StatCard 
-                  title={i18n.t('maxPhaseI')} 
-                  value={filteredSummary!.maxPhaseCurrent.toFixed(1)} 
-                  unit="A" 
-                  icon={Zap} 
-                  gradient={{ from: '#84cc16', to: '#65a30d' }}
-                />
+
+              {/* Power & Current Box */}
+              {(visibleMetrics.maxPower || visibleMetrics.maxTorque || visibleMetrics.maxPhaseCurrent) && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                  <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Zap className="w-4 h-4" />
+                    Мощность и ток
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {visibleMetrics.maxPower && filteredSummary!.maxPower > 0 && (
+                      <StatCard 
+                        title={i18n.t('maxPower')} 
+                        value={filteredSummary!.maxPower.toFixed(0)} 
+                        unit="W" 
+                        icon={Zap} 
+                        gradient={{ from: '#f59e0b', to: '#ef4444' }}
+                      />
+                    )}
+                    {visibleMetrics.maxTorque && filteredSummary!.maxTorque !== undefined && filteredSummary!.maxTorque > 0 && (
+                      <StatCard 
+                        title={i18n.t('maxTorque')} 
+                        value={filteredSummary!.maxTorque.toFixed(2)} 
+                        unit="" 
+                        icon={Zap} 
+                        gradient={{ from: '#a855f7', to: '#9333ea' }}
+                      />
+                    )}
+                    {visibleMetrics.maxPhaseCurrent && filteredSummary!.maxPhaseCurrent !== undefined && filteredSummary!.maxPhaseCurrent > 0 && (
+                      <StatCard 
+                        title={i18n.t('maxPhaseI')} 
+                        value={filteredSummary!.maxPhaseCurrent.toFixed(1)} 
+                        unit="A" 
+                        icon={Zap} 
+                        gradient={{ from: '#84cc16', to: '#65a30d' }}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Battery Box */}
+              {(visibleMetrics.batteryDrop || visibleMetrics.maxBatteryDrop) && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                  <h3 className="text-xs font-semibold text-pink-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Battery className="w-4 h-4" />
+                    Батарея
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {visibleMetrics.batteryDrop && (
+                      <StatCard 
+                        title={i18n.t('batteryDrop')} 
+                        value={filteredSummary!.batteryDrop} 
+                        unit="%" 
+                        icon={Battery} 
+                        gradient={{ from: '#ec4899', to: '#f43f5e' }}
+                      />
+                    )}
+                    {visibleMetrics.maxBatteryDrop && filteredSummary!.maxBatteryDrop !== undefined && filteredSummary!.maxBatteryDrop > 0 && (
+                      <StatCard 
+                        title={i18n.t('maxBatteryDrop')} 
+                        value={filteredSummary!.maxBatteryDrop.toFixed(1)} 
+                        unit="%" 
+                        icon={Battery} 
+                        gradient={{ from: '#f43f5e', to: '#e11d48' }}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Temperature Box */}
+              {(visibleMetrics.avgTemp || visibleMetrics.maxTemp) && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                  <h3 className="text-xs font-semibold text-orange-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Thermometer className="w-4 h-4" />
+                    Температура
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {visibleMetrics.avgTemp && filteredSummary!.avgTemp !== undefined && filteredSummary!.avgTemp > 0 && (
+                      <StatCard 
+                        title={i18n.t('avgTemp')} 
+                        value={filteredSummary!.avgTemp.toFixed(1)} 
+                        unit="°C" 
+                        icon={Thermometer} 
+                        gradient={{ from: '#f97316', to: '#ea580c' }}
+                      />
+                    )}
+                    {visibleMetrics.maxTemp && filteredSummary!.maxTemp !== undefined && filteredSummary!.maxTemp > 0 && (
+                      <StatCard 
+                        title={i18n.t('maxTemp')} 
+                        value={filteredSummary!.maxTemp.toFixed(1)} 
+                        unit="°C" 
+                        icon={Thermometer} 
+                        gradient={{ from: '#ef4444', to: '#dc2626' }}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Acceleration Box */}
+              {visibleMetrics.peakAcceleration && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                  <h3 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Rocket className="w-4 h-4" />
+                    <span>Разгон</span>
+                    {/* Inline tooltip for Acceleration box */}
+                    <div className="relative group">
+                      <Info className="w-3 h-3 text-purple-400/70 cursor-help hover:text-purple-400 transition-colors" />
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-[240px] bg-slate-900/95 backdrop-blur-xl rounded-xl border border-purple-500/30 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 overflow-hidden">
+                        <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 px-3 py-2 border-b border-purple-500/20">
+                          <span className="text-xs font-bold text-purple-200">Анализ ускорения</span>
+                        </div>
+                        <div className="p-3 text-xs text-slate-300 leading-relaxed">
+                          Время разгона между заданными скоростями. Лучший результат выделен золотым. Настройте диапазоны скоростей в таблице ниже.
+                        </div>
+                      </div>
+                    </div>
+                  </h3>
+                  <div className="space-y-2">
+                    {/* Best 0-60 time - highlighted */}
+                    {filteredSummary?.best0to60 && filteredSummary.best0to60 > 0 && (
+                      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-amber-500/10 to-orange-500/10 rounded-xl border border-amber-500/20 mb-3">
+                        <span className="text-white/80 font-medium">Лучший 0-60:</span>
+                        <div className="text-right">
+                          <span className="font-bold text-amber-400">
+                            {filteredSummary.best0to60 < 1 
+                              ? `${(filteredSummary.best0to60 * 1000).toFixed(0)} мс`
+                              : `${filteredSummary.best0to60.toFixed(2)} с`
+                            }
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {thresholds.slice(0, 4).map((t) => {
+                      const result = accelerationResults[t.id];
+                      if (!result?.bestRun) return null;
+                      const timeStr = result.time !== null 
+                        ? (result.time < 1 ? `${(result.time * 1000).toFixed(0)} мс` : `${result.time.toFixed(2)} с`)
+                        : '—';
+                      return (
+                        <div key={t.id} className="flex items-center justify-between text-sm border-b border-white/5 pb-1.5 last:border-0 last:pb-0">
+                          <span className="text-white/70 font-medium">{t.label}:</span>
+                          <div className="text-right flex items-center gap-3">
+                            <span className="font-bold text-white text-base">{result.bestRun.peakAcceleration.toFixed(2)} <span className="text-white/60 text-xs">м/с²</span></span>
+                            <span className="font-bold text-amber-400 text-lg">{timeStr}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Data Stats Box */}
+              {visibleMetrics.totalSamples && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Activity className="w-4 h-4" />
+                    Данные
+                  </h3>
+                  <StatCard 
+                    title={i18n.t('totalSamples')} 
+                    value={filteredData.length.toLocaleString()} 
+                    unit="" 
+                    icon={Activity} 
+                    gradient={{ from: '#64748b', to: '#475569' }}
+                  />
+                </div>
               )}
             </div>
 
             {/* Main Chart with Built-in Time Range & Zoom */}
-            <div className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden mb-8 shadow-2xl">
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden mb-8 shadow-lg">
               {/* Header with toggles and zoom */}
               <div className="p-5 border-b border-white/10">
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
@@ -1181,9 +1549,23 @@ function App() {
                       <BarChart3 className="w-5 h-5 text-white" strokeWidth={2.5} />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                        {i18n.t('tripTelemetry')}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+                          {i18n.t('tripTelemetry')}
+                        </h3>
+                        {/* Inline tooltip for Trip Telemetry - positioned relative to element */}
+                        <div className="relative group">
+                          <Info className="w-4 h-4 text-slate-500 cursor-help hover:text-slate-400 transition-colors" />
+                          <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-[260px] bg-slate-900/95 backdrop-blur-xl rounded-xl border border-blue-500/30 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 overflow-hidden">
+                            <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 px-3 py-2 border-b border-blue-500/20">
+                              <span className="text-xs font-bold text-blue-200">Телеметрия поездки</span>
+                            </div>
+                            <div className="p-3 text-xs text-slate-300 leading-relaxed">
+                              Интерактивный график всех параметров поездки. Поддерживает зум, панораму, переключение линий. Двойной клик — приближение, Shift+колесо — зум, горизонтальный свайп — панорама, вертикальный свайп — зум.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                       {chartZoom && timeRange && (
                         <p className="text-xs text-blue-400">
                           {i18n.t('zoomInfo', { 
@@ -1198,46 +1580,259 @@ function App() {
                   {/* Zoom controls - redesigned for mobile with larger touch targets */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Hide Idle Periods Toggle */}
-                    <button
-                      onClick={() => setHideIdlePeriods(prev => !prev)}
-                      className={cn(
-                        "px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 border flex items-center gap-2",
-                        hideIdlePeriods
-                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
-                          : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
-                      )}
-                      title={i18n.t('hideIdlePeriods')}
-                    >
-                      <Clock className="w-4 h-4" />
-                      <span className="hidden sm:inline">{hideIdlePeriods ? i18n.t('idlePeriodsEnabled') : i18n.t('idlePeriodsDisabled')}</span>
-                    </button>
+                    <div className="relative group">
+                      <button
+                        onClick={() => setHideIdlePeriods(prev => !prev)}
+                        className={cn(
+                          "px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border flex items-center gap-2",
+                          hideIdlePeriods
+                            ? "bg-emerald-500/30 border-emerald-500/60 text-emerald-200 shadow-lg shadow-emerald-500/20"
+                            : "bg-slate-800/80 border-slate-600 text-slate-300 hover:bg-slate-700/80"
+                        )}
+                      >
+                        <Clock className="w-4 h-4" />
+                        <span className="hidden sm:inline">Скрыть простои</span>
+                        <span className="sm:hidden">{hideIdlePeriods ? 'Вкл' : 'Выкл'}</span>
+                      </button>
+                      {/* Tooltip positioned to the RIGHT of button */}
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-[260px] bg-slate-900/95 backdrop-blur-xl rounded-xl border border-emerald-500/30 shadow-2xl shadow-emerald-500/10 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 overflow-hidden max-h-[400px] overflow-y-auto">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 px-3 py-2 border-b border-emerald-500/20 sticky top-0">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1 bg-emerald-500/20 rounded">
+                              <Clock className="w-3 h-3 text-emerald-400" />
+                            </div>
+                            <span className="text-xs font-bold text-emerald-200">Скрыть простои</span>
+                          </div>
+                        </div>
+                        {/* Content */}
+                        <div className="p-3 space-y-2">
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            Убирает из графика периоды стоянки:
+                          </p>
+                          <div className="space-y-1">
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-emerald-400">1</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Стоянка на месте</p>
+                                <p className="text-[9px] text-slate-500">Скорость {'<'}5 км/ч {'>'}30 сек</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-teal-500/10 border border-teal-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-teal-400">2</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Паузы в поездке</p>
+                                <p className="text-[9px] text-slate-500">Светофоры, парковка</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-cyan-400">3</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Эффект</p>
+                                <p className="text-[9px] text-slate-500">Средняя скорость только в движении</p>
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-[9px] text-emerald-400/80 flex items-center gap-1 pt-1 border-t border-slate-700/50">
+                            <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
+                            Полезно для чистой езды
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
                     {/* Data Filter Toggle */}
-                    <button
-                      onClick={() => setFilterConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
-                      className={cn(
-                        "px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 border flex items-center gap-2",
-                        filterConfig.enabled
-                          ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
-                          : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
-                      )}
-                      title={i18n.t('dataFilter')}
-                    >
-                      <Activity className="w-4 h-4" />
-                      <span className="hidden sm:inline">{filterConfig.enabled ? i18n.t('filterEnabled') : i18n.t('filterDisabled')}</span>
-                    </button>
+                    <div className="relative group">
+                      <button
+                        onClick={() => setFilterConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
+                        className={cn(
+                          "px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border flex items-center gap-2",
+                          filterConfig.enabled
+                            ? "bg-amber-500/30 border-amber-500/60 text-amber-200 shadow-lg shadow-amber-500/20"
+                            : "bg-slate-800/80 border-slate-600 text-slate-300 hover:bg-slate-700/80"
+                        )}
+                      >
+                        <Activity className="w-4 h-4" />
+                        <span className="hidden sm:inline">Фильтр данных</span>
+                        <span className="sm:hidden">{filterConfig.enabled ? 'Вкл' : 'Выкл'}</span>
+                      </button>
+                      {/* Tooltip positioned to the RIGHT of button */}
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-[280px] bg-slate-900/95 backdrop-blur-xl rounded-xl border border-amber-500/30 shadow-2xl shadow-amber-500/10 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 overflow-hidden max-h-[450px] overflow-y-auto">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 px-3 py-2 border-b border-amber-500/20 sticky top-0">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1 bg-amber-500/20 rounded">
+                              <Activity className="w-3 h-3 text-amber-400" />
+                            </div>
+                            <span className="text-xs font-bold text-amber-200">Фильтр данных</span>
+                          </div>
+                        </div>
+                        {/* Content */}
+                        <div className="p-3 space-y-2">
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            Удаляет аномалии (настраивается):
+                          </p>
+                          {/* Filter items - compact */}
+                          <div className="space-y-1">
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-red-400">1</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">GPS телепортация</p>
+                                <p className="text-[9px] text-slate-500">{'>'}{filterConfig.gpsTeleportSpeedKmh} км/ч или {'>'}{filterConfig.gpsTeleportDistanceM}м за {'<'}{filterConfig.gpsTeleportTimeS}сек</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-orange-400">2</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Разрывы времени</p>
+                                <p className="text-[9px] text-slate-500">Паузы {'>'}{filterConfig.maxTimeGapSeconds} сек</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-yellow-400">3</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Застрявший GPS</p>
+                                <p className="text-[9px] text-slate-500">{'>'}{filterConfig.stuckGpsPoints} точек с одинаковыми коорд</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-blue-400">4</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Невозможные значения</p>
+                                <p className="text-[9px] text-slate-500">Speed 0-{filterConfig.limits.Speed.max}, Voltage {filterConfig.limits.Voltage.min}-{filterConfig.limits.Voltage.max}V</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-purple-400">5</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Откат дистанции</p>
+                                <p className="text-[9px] text-slate-500">Уменьшение {'>'}{filterConfig.distanceRollbackM}м</p>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Footer */}
+                          <p className="text-[9px] text-amber-400/80 flex items-center gap-1 pt-1 border-t border-slate-700/50">
+                            <span className="w-1 h-1 rounded-full bg-amber-500"></span>
+                            Настройки в панели ↓
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="w-px h-8 bg-white/10 mx-1" />
 
                     {/* Share Button */}
+                    <div className="relative group">
+                      <button
+                        onClick={handleShareStats}
+                        className="px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 rounded-xl border border-purple-500/40 transition-all duration-200 flex items-center gap-2 text-purple-200"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        <span className="hidden sm:inline">Поделиться</span>
+                      </button>
+                      {/* Tooltip positioned to the RIGHT of button */}
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-[240px] bg-slate-900/95 backdrop-blur-xl rounded-xl border border-purple-500/30 shadow-2xl shadow-purple-500/10 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 overflow-hidden max-h-[350px] overflow-y-auto">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 px-3 py-2 border-b border-purple-500/20 sticky top-0">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1 bg-purple-500/20 rounded">
+                              <Share2 className="w-3 h-3 text-purple-400" />
+                            </div>
+                            <span className="text-xs font-bold text-purple-200">Поделиться</span>
+                          </div>
+                        </div>
+                        {/* Content */}
+                        <div className="p-3 space-y-2">
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            Скриншот всей страницы:
+                          </p>
+                          <div className="space-y-1">
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-purple-400">1</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Полная страница</p>
+                                <p className="text-[9px] text-slate-500">Все карточки, график, таблицы</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-pink-500/10 border border-pink-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-pink-400">2</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Высокое качество</p>
+                                <p className="text-[9px] text-slate-500">PNG 1.5x scale, 4K+</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-4 h-4 rounded bg-fuchsia-500/10 border border-fuchsia-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-[8px] text-fuchsia-400">3</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-medium text-slate-200">Файл</p>
+                                <p className="text-[9px] text-slate-500">trip-log-[дата].png</p>
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-[9px] text-purple-400/80 flex items-center gap-1 pt-1 border-t border-slate-700/50">
+                            <span className="w-1 h-1 rounded-full bg-purple-500"></span>
+                            Для соцсетей и архива
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Floating Data Panel Toggle */}
                     <button
-                      onClick={handleShareStats}
-                      className="px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 rounded-xl border border-purple-500/30 transition-all duration-200 flex items-center gap-2 text-purple-300"
-                      title="Поделиться статистикой"
+                      onClick={() => setShowFloatingPanel(prev => !prev)}
+                      className={cn(
+                        "px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border flex items-center gap-2",
+                        showFloatingPanel
+                          ? "bg-indigo-500/30 border-indigo-500/60 text-indigo-200 shadow-lg shadow-indigo-500/20"
+                          : "bg-slate-800/80 border-slate-600 text-slate-300 hover:bg-slate-700/80"
+                      )}
+                      title={showFloatingPanel ? "Плавающая панель включена" : "Плавающая панель выключена"}
                     >
-                      <Share2 className="w-4 h-4" />
-                      <span className="hidden sm:inline">Поделиться</span>
+                      <Grid3X3 className="w-4 h-4" />
+                      <span className="hidden sm:inline">{showFloatingPanel ? 'Панель ON' : 'Панель OFF'}</span>
                     </button>
 
                     <div className="w-px h-8 bg-white/10 mx-1" />
+
+                    {/* Snap Mode Toggle */}
+                    <button
+                      onClick={() => setChartSnapMode(prev => !prev)}
+                      className={cn(
+                        "px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border flex items-center gap-2",
+                        chartSnapMode
+                          ? "bg-cyan-500/30 border-cyan-500/60 text-cyan-200 shadow-lg shadow-cyan-500/20"
+                          : "bg-slate-800/80 border-slate-600 text-slate-300 hover:bg-slate-700/80"
+                      )}
+                      title={chartSnapMode ? "Прилипание к точкам включено" : "Прилипание к точкам выключено"}
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                      </svg>
+                      <span className="hidden sm:inline">{chartSnapMode ? 'Snap ON' : 'Snap OFF'}</span>
+                    </button>
 
                     {/* Chart View Toggle */}
                     <button
@@ -1296,7 +1891,7 @@ function App() {
               {/* Chart Area with interactive controls */}
               <div 
                 ref={chartContainerRef} 
-                className="p-6 cursor-grab active:cursor-grabbing select-none touch-none"
+                className="p-5 cursor-grab active:cursor-grabbing select-none touch-none"
                 onMouseDown={handleChartMouseDown}
                 onMouseMove={handleChartMouseMove}
                 onMouseUp={handleChartMouseUp}
@@ -1306,11 +1901,11 @@ function App() {
                 onTouchStart={handleChartTouchStart}
                 onTouchMove={handleChartTouchMove}
                 onTouchEnd={handleChartTouchEnd}
+                onClick={() => showFloatingPanel && setFloatingPanelFrozen(prev => !prev)}
               >
                 <div className="h-[450px] w-full">
                   {chartView === 'line' ? (
                     <Line
-                      ref={chartRef}
                       options={{
                         ...commonOptions,
                         scales: {
@@ -1387,7 +1982,11 @@ function App() {
                             title: { display: true, text: 'PWM (%)', color: 'rgba(6, 182, 212, 0.7)', font: { size: 12, weight: 500 } }
                           },
                         },
-                        interaction: { mode: 'index', intersect: false },
+                        interaction: { 
+                          mode: chartSnapMode ? 'nearest' : 'index', 
+                          intersect: chartSnapMode,
+                          axis: 'x'
+                        },
                         plugins: {
                           legend: { display: false },
                           tooltip: {
@@ -1401,7 +2000,34 @@ function App() {
                             displayColors: true,
                             boxPadding: 4,
                           }
-                        }
+                        },
+                        onHover: throttle((_event: any, activeElements: any[], _chart: any) => {
+                          if (!showFloatingPanel || floatingPanelFrozen || !activeElements.length) return;
+                          
+                          const dataIndex = activeElements[0].index;
+                          const dataPoint = displayData[dataIndex];
+                          if (!dataPoint) return;
+                          
+                          const newData = [
+                            { label: 'Скорость', value: dataPoint.Speed, color: '#3b82f6', unit: 'км/ч' },
+                            { label: 'GPS', value: dataPoint.GPSSpeed, color: '#10b981', unit: 'км/ч' },
+                            { label: 'Мощность', value: dataPoint.Power, color: '#f59e0b', unit: 'Вт' },
+                            { label: 'Ток', value: dataPoint.Current, color: '#ef4444', unit: 'А' },
+                            { label: 'Напряжение', value: dataPoint.Voltage, color: '#8b5cf6', unit: 'В' },
+                            { label: 'Батарея', value: dataPoint.BatteryLevel, color: '#ec4899', unit: '%' },
+                            { label: 'Темп', value: dataPoint.Temperature, color: '#f97316', unit: '°C' },
+                            { label: 'PWM', value: dataPoint.PWM, color: '#06b6d4', unit: '%' },
+                          ];
+                          
+                          const timestamp = new Date(dataPoint.timestamp).toLocaleTimeString('ru-RU', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            second: '2-digit'
+                          });
+                          
+                          setFloatingPanelData(newData);
+                          setFloatingPanelTimestamp(timestamp);
+                        }, 50)
                       } as any}
                       data={combinedChartData}
                     />
@@ -1411,8 +2037,8 @@ function App() {
                 </div>
               </div>
 
-              {/* Custom Legend - horizontal lines flowing into labels */}
-              <div className="px-6 pb-2 flex items-center justify-center gap-8">
+              {/* Custom Legend - horizontal lines flowing into labels - hidden on mobile */}
+              <div className="hidden sm:flex px-6 pb-2 items-center justify-center gap-8">
                 {/* Speed */}
                 <div className="flex items-center gap-2">
                   {/* Steel 0-line */}
@@ -1472,7 +2098,9 @@ function App() {
               {timeRange && (
                 <div className="px-6 pb-4 border-t border-white/5 pt-4">
                   <div className="flex items-center gap-4">
-                    <span className="text-xs text-slate-500 whitespace-nowrap">{i18n.t('scale')}:</span>
+                    <span className="text-xs text-slate-500 whitespace-nowrap">
+                      {hideIdlePeriods ? 'Активное время:' : i18n.t('scale') + ':'}
+                    </span>
                     <div 
                       data-timeline
                       className="flex-1 relative h-8 bg-white/5 rounded-lg overflow-hidden cursor-pointer hover:bg-white/10 transition-colors"
@@ -1481,8 +2109,43 @@ function App() {
                       onMouseUp={handleTimelineMouseUp}
                       onMouseLeave={handleTimelineMouseUp}
                     >
-                      {/* Full range background */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-900/20 to-purple-900/20" />
+                      {/* Background - show segments when collapsed */}
+                      {hideIdlePeriods && collapsedTimeRange ? (
+                        <>
+                          {/* Render gaps (idle periods) as darker segments */}
+                          {collapsedTimeRange.periods.map((period, index) => {
+                            const prevPeriod = index > 0 ? collapsedTimeRange.periods[index - 1] : null;
+                            const gapStart = prevPeriod ? prevPeriod.end : timeRange.start;
+                            const totalRange = timeRange.end - timeRange.start;
+                            
+                            return (
+                              <div key={index}>
+                                {/* Gap before this period (if not first) */}
+                                {index > 0 && (
+                                  <div
+                                    className="absolute top-0 bottom-0 bg-slate-800/50"
+                                    style={{
+                                      left: `${((gapStart - timeRange.start) / totalRange) * 100}%`,
+                                      width: `${((period.start - gapStart) / totalRange) * 100}%`,
+                                    }}
+                                  />
+                                )}
+                                {/* Active period */}
+                                <div
+                                  className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-900/40 to-purple-900/40"
+                                  style={{
+                                    left: `${((period.start - timeRange.start) / totalRange) * 100}%`,
+                                    width: `${((period.end - period.start) / totalRange) * 100}%`,
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        /* Full range background */
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-900/20 to-purple-900/20" />
+                      )}
                       
                       {/* Current viewport with draggable edges */}
                       {chartZoom && (
@@ -1539,15 +2202,150 @@ function App() {
 
             {/* Acceleration Analysis Section */}
             <div className="mt-8">
-              <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+              <div className="flex items-center gap-3 mb-6">
                 <Rocket className="w-6 h-6 text-amber-400" />
-                {i18n.t('accelerationAnalysis')}
-              </h2>
+                <h2 className="text-2xl font-bold text-white">
+                  {i18n.t('accelerationAnalysis')}
+                </h2>
+                {/* Inline tooltip for Acceleration Analysis section */}
+                <div className="relative group">
+                  <Info className="w-4 h-4 text-slate-500 cursor-help hover:text-slate-400 transition-colors" />
+                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-[260px] bg-slate-900/95 backdrop-blur-xl rounded-xl border border-purple-500/30 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 overflow-hidden">
+                    <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 px-3 py-2 border-b border-purple-500/20">
+                      <span className="text-xs font-bold text-purple-200">Анализ ускорения</span>
+                    </div>
+                    <div className="p-3 text-xs text-slate-300 leading-relaxed">
+                      Анализ разгона с места. Показывает время достижения заданных скоростей (0-60, 0-100 и др.) и энергоэффективность. Кликайте пороги для редактирования, используйте ползунок на полосе для быстрой настройки.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Acceleration Scatter Plots */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                {/* Speed vs Power Scatter */}
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                  <h3 className="text-sm font-semibold text-amber-400 mb-4 flex items-center gap-2">
+                    <Zap className="w-4 h-4" />
+                    Скорость vs Мощность
+                  </h3>
+                  <div className="h-[300px]">
+                    <Scatter
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                          x: {
+                            type: 'linear' as const,
+                            position: 'bottom' as const,
+                            title: { display: true, text: 'Скорость (км/ч)', color: 'rgba(255, 255, 255, 0.7)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: 'rgba(255, 255, 255, 0.5)' },
+                            min: 0,
+                          },
+                          y: {
+                            type: 'linear' as const,
+                            position: 'left' as const,
+                            title: { display: true, text: 'Мощность (Вт)', color: 'rgba(255, 255, 255, 0.7)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: 'rgba(255, 255, 255, 0.5)' },
+                          },
+                        },
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#cbd5e1',
+                          },
+                        },
+                      }}
+                      data={{
+                        datasets: [{
+                          label: 'Speed vs Power',
+                          data: filteredData
+                            .filter(d => d.Speed > 5 && d.Power > 0)
+                            .map(d => ({ x: d.Speed, y: d.Power })),
+                          backgroundColor: 'rgba(245, 158, 11, 0.6)',
+                          borderColor: 'rgba(245, 158, 11, 0.8)',
+                          pointRadius: 2,
+                          pointHoverRadius: 4,
+                        }],
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Speed vs Current Scatter */}
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 p-4">
+                  <h3 className="text-sm font-semibold text-red-400 mb-4 flex items-center gap-2">
+                    <Activity className="w-4 h-4" />
+                    Скорость vs Ток
+                  </h3>
+                  <div className="h-[300px]">
+                    <Scatter
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                          x: {
+                            type: 'linear' as const,
+                            position: 'bottom' as const,
+                            title: { display: true, text: 'Скорость (км/ч)', color: 'rgba(255, 255, 255, 0.7)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: 'rgba(255, 255, 255, 0.5)' },
+                            min: 0,
+                          },
+                          y: {
+                            type: 'linear' as const,
+                            position: 'left' as const,
+                            title: { display: true, text: 'Ток (А)', color: 'rgba(255, 255, 255, 0.7)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: 'rgba(255, 255, 255, 0.5)' },
+                          },
+                        },
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#cbd5e1',
+                          },
+                        },
+                      }}
+                      data={{
+                        datasets: [{
+                          label: 'Speed vs Current',
+                          data: filteredData
+                            .filter(d => d.Speed > 5 && d.Current > 0)
+                            .map(d => ({ x: d.Speed, y: d.Current })),
+                          backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                          borderColor: 'rgba(239, 68, 68, 0.8)',
+                          pointRadius: 2,
+                          pointHoverRadius: 4,
+                        }],
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
               <AccelerationChart data={filteredData} />
               <AccelerationTable 
                 data={filteredData} 
                 thresholds={thresholds} 
                 onThresholdsChange={setThresholds} 
+              />
+              
+              {/* Floating Data Panel - draggable overlay */}
+              <FloatingDataPanel
+                data={floatingPanelData}
+                timestamp={floatingPanelTimestamp}
+                isVisible={showFloatingPanel}
+                onClose={() => setShowFloatingPanel(false)}
+                position={floatingPanelPosition}
+                onPositionChange={setFloatingPanelPosition}
+                isFrozen={floatingPanelFrozen}
+                onToggleFreeze={() => setFloatingPanelFrozen(prev => !prev)}
               />
             </div>
           </>
@@ -1565,9 +2363,41 @@ function App() {
               <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
                 {i18n.t('readyToAnalyze')}
               </h2>
-              <p className="text-slate-400 max-w-md mb-8">
+              <p className="text-slate-400 max-w-md mb-4">
                 {i18n.t('uploadPrompt')}
               </p>
+              
+              {/* Demo file button */}
+              <button
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    setFileName('demo-trip.csv');
+                    const response = await fetch('/demo-trip.csv');
+                    const text = await response.text();
+                    const parsedData = parseTripData(text);
+                    setData(parsedData);
+                    setSummary(calculateSummary(parsedData));
+                    if (parsedData.length > 0) {
+                      const timestamps = parsedData.map(e => e.timestamp);
+                      setTimeRange({
+                        start: Math.min(...timestamps),
+                        end: Math.max(...timestamps),
+                      });
+                    }
+                    setLoading(false);
+                  } catch (error) {
+                    console.error('Failed to load demo:', error);
+                    alert('Ошибка загрузки демо файла');
+                    setLoading(false);
+                  }
+                }}
+                className="mb-6 px-5 py-2.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 rounded-xl border border-emerald-500/40 text-emerald-300 text-sm font-medium transition-all duration-200 flex items-center gap-2"
+              >
+                <Activity className="w-4 h-4" />
+                Загрузить демо поездку
+              </button>
+              
               <div className="flex flex-wrap justify-center gap-3">
                 {[i18n.t('speed'), i18n.t('power'), i18n.t('temp'), i18n.t('voltage'), 'GPS'].map((item) => (
                   <span key={item} className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-slate-400">

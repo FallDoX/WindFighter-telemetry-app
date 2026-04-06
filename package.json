@@ -1,8 +1,8 @@
 {
-  "name": "trip-log-analyzer",
+  "name": "wfeucapp",
   "private": true,
   "version": "2.0.0",
-  "description": "Trip Log Analyzer - Cross-platform telemetry visualization tool",
+  "description": "WindFighter EUC - Professional Electric Unicycle Telemetry Analytics Platform",
   "author": "Trip Log Analyzer Team",
   "type": "module",
   "scripts": {
@@ -21,6 +21,8 @@
     "chartjs-adapter-date-fns": "^3.0.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "html-to-image": "^1.11.13",
+    "html2canvas": "^1.4.1",
     "lucide-react": "^1.7.0",
     "papaparse": "^5.5.3",
     "react": "^19.2.4",

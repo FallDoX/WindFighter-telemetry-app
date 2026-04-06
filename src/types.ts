@@ -87,7 +87,8 @@ export interface AccelerationResult {
 export interface SpeedThreshold {
   id: string;
   label: string;
-  value: number; // km/h
+  value: number; // km/h - target speed (end)
+  startValue?: number; // km/h - starting speed (default 0)
 }
 
 export type CSVFormat = 'old' | 'new';

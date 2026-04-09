@@ -1421,6 +1421,7 @@ function App() {
                               return next;
                             });
                           }}
+                          data={data}
                         />
                       </TabsContent>
                     </Tabs>

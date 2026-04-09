@@ -1231,7 +1231,7 @@ function App() {
                           className={cn(
                             "px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-2 min-h-[44px]",
                             filterConfig.enabled
-                              ? "bg-amber-500/30 border-amber-500/60 text-amber-200"
+                              ? "bg-emerald-500/30 border-emerald-500/60 text-emerald-200"
                               : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
                           )}
                           title="Фильтр данных: удаляет аномалии GPS и разрывы времени"
@@ -1276,6 +1276,9 @@ function App() {
                                         {filterConfig.maxTimeGapSeconds} сек
                                       </span>
                                     </div>
+                                    <p className="text-[10px] text-slate-500 mb-2">
+                                      Максимальный разрыв между точками данных. Разрывы больше этого значения считаются аномальными и удаляются.
+                                    </p>
                                     <div className="relative">
                                       <input
                                         type="range"
@@ -1303,6 +1306,9 @@ function App() {
                                           {filterConfig.gpsTeleportSpeedKmh} км/ч
                                         </span>
                                       </div>
+                                      <p className="text-[10px] text-slate-500 mb-2">
+                                        Максимальная допустимая скорость GPS. Скачки скорости выше этого значения считаются аномалиями (телепортациями) и удаляются.
+                                      </p>
                                       <div className="relative">
                                         <input
                                           type="range"

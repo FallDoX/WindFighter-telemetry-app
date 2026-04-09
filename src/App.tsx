@@ -1327,6 +1327,36 @@ function App() {
                                       </div>
                                     </div>
                                   )}
+                                  <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                      <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                                        <Activity className="w-3.5 h-3.5 text-blue-400" />
+                                        Скорость колеса лимит
+                                      </label>
+                                      <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
+                                        {filterConfig.wheelSpeedLimitKmh} км/ч
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mb-2">
+                                      Максимальная допустимая скорость колеса. Показания выше этого значения считаются аномальными и удаляются.
+                                    </p>
+                                    <div className="relative">
+                                      <input
+                                        type="range"
+                                        min="50"
+                                        max="300"
+                                        step="5"
+                                        value={filterConfig.wheelSpeedLimitKmh}
+                                        onChange={(e) => setFilterConfig(prev => ({ ...prev, wheelSpeedLimitKmh: parseInt(e.target.value) }))}
+                                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                        aria-label="Лимит скорости колеса в км/ч"
+                                      />
+                                      <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                                        <span>50</span>
+                                        <span>300</span>
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               </>
                             )}

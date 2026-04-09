@@ -321,6 +321,7 @@ export interface DataFilterConfig {
   gpsTeleportTimeS: number;
   stuckGpsPoints: number;
   distanceRollbackM: number;
+  wheelSpeedLimitKmh: number;
 }
 
 export const defaultFilterConfig: DataFilterConfig = {
@@ -344,6 +345,7 @@ export const defaultFilterConfig: DataFilterConfig = {
   gpsTeleportTimeS: 5,
   stuckGpsPoints: 10,
   distanceRollbackM: 10,
+  wheelSpeedLimitKmh: 250,
 };
 
 export function filterData(data: TripEntry[], config: DataFilterConfig = defaultFilterConfig): { filtered: TripEntry[]; removed: number; issues: string[] } {
@@ -457,6 +459,13 @@ export function filterData(data: TripEntry[], config: DataFilterConfig = default
         removed++;
         return false;
       }
+    }
+
+    // Check wheel speed limit (separate from limits to allow filtering even if within reasonable range)
+    if (entry.Speed !== null && entry.Speed !== undefined && entry.Speed > config.wheelSpeedLimitKmh) {
+      issues.push(`Wheel speed ${entry.Speed.toFixed(1)} km/h exceeds limit ${config.wheelSpeedLimitKmh} km/h at index ${index}`);
+      removed++;
+      return false;
     }
 
     return true;

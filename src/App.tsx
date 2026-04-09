@@ -14,12 +14,12 @@ import {
   Filler
 } from 'chart.js';
 import { parseTripData, calculateSummary, downsample, filterData, defaultFilterConfig, type DataFilterConfig } from './utils/parser';
-import type { TripEntry, TripSummary, AccelerationAttempt } from './types';
+import type { TripEntry, TripSummary } from './types';
 import { AccelerationTab } from './components/AccelerationTab';
 import { AccelerationComparison } from './components/AccelerationComparison';
 import { AccelerationTable } from './components/AccelerationTable';
 import {
-  Activity, Clock, Settings, Eye, EyeOff, Grid3X3, ZoomIn, ZoomOut, Play, Upload, BarChart
+  Activity, Clock, Settings, Eye, EyeOff, ZoomIn, ZoomOut, Play, Upload, BarChart
 } from 'lucide-react';
 import { throttle } from './utils/performance';
 import { clsx, type ClassValue } from 'clsx';
@@ -172,7 +172,7 @@ function App() {
   });
 
   // Acceleration state - extracted to useAccelerationState hook
-  const { accelerationAttempts, thresholdPairs, setThresholdPairs, showIncomplete, setShowIncomplete, selectedColumns, setSelectedColumns, clearSettings } = useAccelerationState(data);
+  const { accelerationAttempts, showIncomplete, setShowIncomplete, selectedColumns, setSelectedColumns, clearSettings } = useAccelerationState(data);
 
   // Comparison mode state
   const [selectedAttempts, setSelectedAttempts] = useState<Set<string>>(new Set());
@@ -191,11 +191,6 @@ function App() {
 
   const clearSelection = useCallback(() => {
     setSelectedAttempts(new Set());
-  }, []);
-
-  const getBestAttempt = useCallback((attempts: AccelerationAttempt[]): AccelerationAttempt | null => {
-    if (attempts.length === 0) return null;
-    return attempts.reduce((best, current) => current.time < best.time ? current : best);
   }, []);
 
   // Active tab state
@@ -1856,20 +1851,6 @@ function App() {
               <div className="p-5">
                 <AccelerationTab
                   accelerationAttempts={accelerationAttempts}
-                  showIncomplete={showIncomplete}
-                  selectedColumns={selectedColumns}
-                  onShowIncompleteToggle={() => setShowIncomplete(prev => !prev)}
-                  onColumnToggle={(column) => {
-                    setSelectedColumns(prev => {
-                      const next = new Set(prev);
-                      if (next.has(column)) {
-                        next.delete(column);
-                      } else {
-                        next.add(column);
-                      }
-                      return next;
-                    });
-                  }}
                   data={data}
                   clearSettings={clearSettings}
                 />

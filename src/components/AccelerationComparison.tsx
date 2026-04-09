@@ -44,6 +44,7 @@ export const AccelerationComparison = memo(({
   data,
 }: AccelerationComparisonProps) => {
   const [comparisonFilter, setComparisonFilter] = useState<'all' | 'best' | 'worst'>('all');
+  const [showPowerCurve, setShowPowerCurve] = useState(false);
 
   const selectedAttemptObjects = useMemo(() => {
     return accelerationAttempts.filter(a => selectedAttempts.has(a.id));
@@ -75,6 +76,8 @@ export const AccelerationComparison = memo(({
       tension: number;
       pointRadius: number;
       borderWidth: number;
+      borderDash?: number[];
+      yAxisID?: string;
     }> = [];
 
     filteredAttempts.forEach((attempt, index) => {
@@ -84,6 +87,7 @@ export const AccelerationComparison = memo(({
 
       if (attemptData.length > 0) {
         const isBest = bestAttempt?.id === attempt.id;
+        // Speed dataset
         datasets.push({
           label: `#${index + 1} (${attempt.thresholdPair.from}-${attempt.thresholdPair.to} км/ч, ${attempt.time.toFixed(2)}с)`,
           data: attemptData.map(e => ({ x: e.timestamp, y: e.Speed })),
@@ -93,12 +97,29 @@ export const AccelerationComparison = memo(({
           tension: 0.1,
           pointRadius: 0,
           borderWidth: isBest ? 3 : 1.5,
+          yAxisID: 'y',
         });
+
+        // Power dataset (when showPowerCurve is true)
+        if (showPowerCurve) {
+          datasets.push({
+            label: `#${index + 1} Мощность`,
+            data: attemptData.map(e => ({ x: e.timestamp, y: e.Power })),
+            borderColor: ATTEMPT_COLORS[index % ATTEMPT_COLORS.length],
+            backgroundColor: `${ATTEMPT_COLORS[index % ATTEMPT_COLORS.length]}20`,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 0,
+            borderWidth: 2,
+            borderDash: [5, 5],
+            yAxisID: 'y1',
+          });
+        }
       }
     });
 
     return { datasets };
-  }, [filteredAttempts, data, bestAttempt]);
+  }, [filteredAttempts, data, bestAttempt, showPowerCurve]);
 
   const chartOptions = {
     responsive: true,
@@ -143,6 +164,9 @@ export const AccelerationComparison = memo(({
         },
       },
       y: {
+        type: 'linear' as const,
+        display: true,
+        position: 'left' as const,
         title: {
           display: true,
           text: 'Скорость (км/ч)',
@@ -157,6 +181,24 @@ export const AccelerationComparison = memo(({
           font: { size: 10 },
         },
       },
+      y1: showPowerCurve ? {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        title: {
+          display: true,
+          text: 'Мощность (Вт)',
+          color: '#94a3b8',
+          font: { size: 11 },
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+        ticks: {
+          color: '#94a3b8',
+          font: { size: 10 },
+        },
+      } : undefined,
     },
   };
 
@@ -191,6 +233,16 @@ export const AccelerationComparison = memo(({
               {filter === 'all' ? 'Все' : filter === 'best' ? 'Лучшие 5' : 'Худшие 5'}
             </button>
           ))}
+          <button
+            onClick={() => setShowPowerCurve(!showPowerCurve)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+              showPowerCurve
+                ? 'bg-green-500/20 border-green-500/50 text-green-300'
+                : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-600/70'
+            }`}
+          >
+            Мощность
+          </button>
         </div>
       </div>
 
@@ -211,7 +263,7 @@ export const AccelerationComparison = memo(({
           <div className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 p-6">
             <h2 className="text-lg font-bold text-white mb-4">Таблица дельта-метрик</h2>
             <p className="text-xs text-slate-400 mb-4">
-              Разница относительно лучшей попытки ({bestAttempt.time.toFixed(2)}с)
+              Разница относительно лучшей попытки ({bestAttempt?.time.toFixed(2)}с)
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

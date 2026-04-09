@@ -95,6 +95,59 @@ export function detectAccelerations(data: TripEntry[], thresholdPairs: Threshold
         const batteryDrop = attemptEnd.BatteryLevel - attemptStart.BatteryLevel;
         const averageTemperature = temperatureValues.reduce((sum, val) => sum + val, 0) / temperatureValues.length;
 
+        // Calculate advanced power metrics (Plan 7.1)
+        const speedDelta = attemptEnd.Speed - attemptStart.Speed;
+        const powerEfficiency = speedDelta > 0 ? peakPower / speedDelta : 0;
+        
+        // Calculate power consistency (standard deviation normalized to 0-1)
+        const powerMean = averagePower;
+        const powerVariance = powerValues.reduce((sum, val) => sum + Math.pow(val - powerMean, 2), 0) / powerValues.length;
+        const powerStdDev = Math.sqrt(powerVariance);
+        const powerConsistency = powerStdDev > 0 ? 1 - (powerStdDev / peakPower) : 1;
+        
+        // Calculate power distribution
+        const powerDistribution = {
+          low: powerValues.filter(v => v < 1000).length / powerValues.length,
+          medium: powerValues.filter(v => v >= 1000 && v < 2000).length / powerValues.length,
+          high: powerValues.filter(v => v >= 2000).length / powerValues.length
+        };
+
+        // Calculate battery impact metrics (Plan 7.2)
+        const batteryDropRate = time > 0 ? batteryDrop / time : 0;
+        const energyPerKm = distance > 0 ? (averagePower * time / 3600) / (distance / 1000) : 0;
+
+        // Calculate temperature impact metrics (Plan 7.3)
+        // Temperature-power correlation (Pearson correlation coefficient)
+        let temperaturePowerCorrelation = 0;
+        if (temperatureValues.length > 1 && powerValues.length > 1) {
+          const tempMean = averageTemperature;
+          const powerMeanCalc = averagePower;
+          let numerator = 0;
+          let tempStdDevSum = 0;
+          let powerStdDevSum = 0;
+          for (let j = 0; j < temperatureValues.length; j++) {
+            const tempDiff = temperatureValues[j] - tempMean;
+            const powerDiff = powerValues[j] - powerMeanCalc;
+            numerator += tempDiff * powerDiff;
+            tempStdDevSum += tempDiff * tempDiff;
+            powerStdDevSum += powerDiff * powerDiff;
+          }
+          const tempStdDev = Math.sqrt(tempStdDevSum);
+          const powerStdDevCalc = Math.sqrt(powerStdDevSum);
+          temperaturePowerCorrelation = (tempStdDev > 0 && powerStdDevCalc > 0) 
+            ? numerator / (tempStdDev * powerStdDevCalc) 
+            : 0;
+        }
+
+        // Temperature efficiency (optimal range 20-35°C)
+        const tempEff = averageTemperature;
+        let temperatureEfficiency = 1;
+        if (tempEff < 20) {
+          temperatureEfficiency = Math.max(0, tempEff / 20);
+        } else if (tempEff > 35) {
+          temperatureEfficiency = Math.max(0, 1 - (tempEff - 35) / 20);
+        }
+
         attempts.push({
           id: `accel-${startIndex}-${i}-${pair.from}-${pair.to}`,
           startTimestamp: attemptStart.timestamp,
@@ -111,7 +164,15 @@ export function detectAccelerations(data: TripEntry[], thresholdPairs: Threshold
           averageVoltage: averageVoltage,
           batteryDrop: batteryDrop,
           averageTemperature: averageTemperature,
-          isComplete: true
+          isComplete: true,
+          // Advanced metrics
+          powerEfficiency,
+          powerConsistency,
+          powerDistribution,
+          batteryDropRate,
+          energyPerKm,
+          temperaturePowerCorrelation,
+          temperatureEfficiency
         });
 
         // Reset for next attempt for this pair
@@ -167,6 +228,55 @@ export function detectAccelerations(data: TripEntry[], thresholdPairs: Threshold
     const batteryDrop = attemptEnd.BatteryLevel - tracking.attemptStart.BatteryLevel;
     const averageTemperature = temperatureValues.reduce((sum, val) => sum + val, 0) / temperatureValues.length;
 
+    // Calculate advanced power metrics (Plan 7.1)
+    const speedDelta = attemptEnd.Speed - tracking.attemptStart.Speed;
+    const powerEfficiency = speedDelta > 0 ? peakPower / speedDelta : 0;
+    
+    const powerMean = averagePower;
+    const powerVariance = powerValues.reduce((sum, val) => sum + Math.pow(val - powerMean, 2), 0) / powerValues.length;
+    const powerStdDev = Math.sqrt(powerVariance);
+    const powerConsistency = powerStdDev > 0 ? 1 - (powerStdDev / peakPower) : 1;
+    
+    const powerDistribution = {
+      low: powerValues.filter(v => v < 1000).length / powerValues.length,
+      medium: powerValues.filter(v => v >= 1000 && v < 2000).length / powerValues.length,
+      high: powerValues.filter(v => v >= 2000).length / powerValues.length
+    };
+
+    // Calculate battery impact metrics (Plan 7.2)
+    const batteryDropRate = time > 0 ? batteryDrop / time : 0;
+    const energyPerKm = distance > 0 ? (averagePower * time / 3600) / (distance / 1000) : 0;
+
+    // Calculate temperature impact metrics (Plan 7.3)
+    let temperaturePowerCorrelation = 0;
+    if (temperatureValues.length > 1 && powerValues.length > 1) {
+      const tempMean = averageTemperature;
+      const powerMeanCalc = averagePower;
+      let numerator = 0;
+      let tempStdDevSum = 0;
+      let powerStdDevSum = 0;
+      for (let j = 0; j < temperatureValues.length; j++) {
+        const tempDiff = temperatureValues[j] - tempMean;
+        const powerDiff = powerValues[j] - powerMeanCalc;
+        numerator += tempDiff * powerDiff;
+        tempStdDevSum += tempDiff * tempDiff;
+        powerStdDevSum += powerDiff * powerDiff;
+      }
+      const tempStdDev = Math.sqrt(tempStdDevSum);
+      const powerStdDevCalc = Math.sqrt(powerStdDevSum);
+      temperaturePowerCorrelation = (tempStdDev > 0 && powerStdDevCalc > 0) 
+        ? numerator / (tempStdDev * powerStdDevCalc) 
+        : 0;
+    }
+
+    const tempEff = averageTemperature;
+    let temperatureEfficiency = 1;
+    if (tempEff < 20) {
+      temperatureEfficiency = Math.max(0, tempEff / 20);
+    } else if (tempEff > 35) {
+      temperatureEfficiency = Math.max(0, 1 - (tempEff - 35) / 20);
+    }
+
     attempts.push({
       id: `accel-${startIndex}-${data.length - 1}-${pair.from}-${pair.to}`,
       startTimestamp: tracking.attemptStart.timestamp,
@@ -183,7 +293,15 @@ export function detectAccelerations(data: TripEntry[], thresholdPairs: Threshold
       averageVoltage: averageVoltage,
       batteryDrop: batteryDrop,
       averageTemperature: averageTemperature,
-      isComplete: false
+      isComplete: false,
+      // Advanced metrics
+      powerEfficiency,
+      powerConsistency,
+      powerDistribution,
+      batteryDropRate,
+      energyPerKm,
+      temperaturePowerCorrelation,
+      temperatureEfficiency
     });
   }
 

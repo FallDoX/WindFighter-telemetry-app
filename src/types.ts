@@ -66,13 +66,19 @@ export interface TripSummary {
 
 export type CSVFormat = 'old' | 'new';
 
+export type ThresholdPair = {
+  from: number;
+  to: number;
+};
+
 export interface AccelerationAttempt {
   id: string;
   startTimestamp: number;
   endTimestamp: number;
   startSpeed: number;
   endSpeed: number;
-  targetSpeed: number;
+  targetSpeed: number; // Keep for backward compatibility
+  thresholdPair: ThresholdPair; // New field
   time: number;
   distance: number;
   averagePower: number;
@@ -82,4 +88,14 @@ export interface AccelerationAttempt {
   batteryDrop: number;
   averageTemperature: number;
   isComplete: boolean;
+  // Advanced power metrics (Plan 7.1)
+  powerEfficiency: number; // power per speed unit (W/(km/h))
+  powerConsistency: number; // standard deviation of power values (0-1 score)
+  powerDistribution: { low: number; medium: number; high: number }; // percentage of time in power bands
+  // Battery impact metrics (Plan 7.2)
+  batteryDropRate: number; // battery drop per second (%/s)
+  energyPerKm: number; // energy consumption per km (Wh/km)
+  // Temperature impact metrics (Plan 7.3)
+  temperaturePowerCorrelation: number; // correlation coefficient between temperature and power (-1 to 1)
+  temperatureEfficiency: number; // normalized efficiency score based on temperature
 }

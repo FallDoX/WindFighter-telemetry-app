@@ -13,7 +13,6 @@ import {
   Filler
 } from 'chart.js';
 import 'chartjs-adapter-date-fns';
-import { AccelerationTable } from './AccelerationTable';
 import type { AccelerationAttempt, TripEntry } from '../types';
 
 ChartJS.register(
@@ -30,10 +29,6 @@ ChartJS.register(
 
 interface AccelerationTabProps {
   accelerationAttempts: AccelerationAttempt[];
-  showIncomplete: boolean;
-  selectedColumns: Set<string>;
-  onShowIncompleteToggle: () => void;
-  onColumnToggle: (column: string) => void;
   data: TripEntry[];
   clearSettings?: () => void;
 }
@@ -61,10 +56,6 @@ const PRESETS = [
 
 export const AccelerationTab = memo(({
   accelerationAttempts,
-  showIncomplete,
-  selectedColumns,
-  onShowIncompleteToggle,
-  onColumnToggle,
   data,
   clearSettings,
 }: AccelerationTabProps) => {
@@ -97,9 +88,9 @@ export const AccelerationTab = memo(({
       const preset = PRESETS.find(p => p.id === presetId);
       if (!preset || preset.id === 'custom') return;
 
-      // Filter attempts that match the preset range (allow some tolerance)
+      // Filter attempts that match the preset threshold pair
       const presetAttempts = accelerationAttempts.filter(
-        attempt => Math.abs(attempt.startSpeed - preset.from) < 1 && Math.abs(attempt.endSpeed - preset.to) < 1
+        attempt => Math.abs(attempt.thresholdPair.from - preset.from) < 1 && Math.abs(attempt.thresholdPair.to - preset.to) < 1
       );
 
       presetAttempts.forEach((attempt, index) => {
@@ -130,7 +121,7 @@ export const AccelerationTab = memo(({
 
         if (attemptData.length > 0) {
           datasets.push({
-            label: `#${index + 1} (${attempt.startSpeed.toFixed(0)}-${attempt.endSpeed.toFixed(0)} км/ч, ${attempt.time.toFixed(2)}с, ${attempt.distance.toFixed(1)}м)`,
+            label: `#${index + 1} (${attempt.thresholdPair.from}-${attempt.thresholdPair.to} км/ч, ${attempt.time.toFixed(2)}с, ${attempt.distance.toFixed(1)}м)`,
             data: attemptData.map(e => ({ x: e.timestamp, y: e.Speed })),
             borderColor: ATTEMPT_COLORS[index % ATTEMPT_COLORS.length],
             backgroundColor: `${ATTEMPT_COLORS[index % ATTEMPT_COLORS.length]}20`,
@@ -232,7 +223,7 @@ export const AccelerationTab = memo(({
             const attemptCount = preset.id === 'custom'
               ? accelerationAttempts.length
               : accelerationAttempts.filter(
-                  attempt => Math.abs(attempt.startSpeed - preset.from) < 1 && Math.abs(attempt.endSpeed - preset.to) < 1
+                  attempt => Math.abs(attempt.thresholdPair.from - preset.from) < 1 && Math.abs(attempt.thresholdPair.to - preset.to) < 1
                 ).length;
 
             return (

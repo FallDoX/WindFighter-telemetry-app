@@ -1372,99 +1372,6 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Chart Display Group - View Toggle */}
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1 px-2 py-1 bg-slate-800/50 rounded-lg border border-white/5">
-                        <button
-                          onClick={() => setChartView(chartView === 'line' ? 'scatter' : 'line')}
-                          className={cn(
-                            "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
-                            chartView === 'line'
-                              ? "bg-blue-500/30 border-blue-500/60 text-blue-200"
-                              : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
-                          )}
-                          title="Переключить вид графика: Линейный график / Точечная диаграмма"
-                        >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                          </svg>
-                          <span className="hidden sm:inline">Линия</span>
-                        </button>
-                        <button
-                          onClick={() => setChartView(chartView === 'line' ? 'scatter' : 'line')}
-                          className={cn(
-                            "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
-                            chartView === 'scatter'
-                              ? "bg-purple-500/30 border-purple-500/60 text-purple-200"
-                              : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
-                          )}
-                          title="Переключить вид графика: Линейный график / Точечная диаграмма"
-                        >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="1" />
-                            <circle cx="19" cy="5" r="1" />
-                            <circle cx="5" cy="19" r="1" />
-                          </svg>
-                          <span className="hidden sm:inline">Точки</span>
-                        </button>
-                        <button
-                          onClick={() => setChartSnapMode(prev => !prev)}
-                          className={cn(
-                            "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
-                            chartSnapMode
-                              ? "bg-cyan-500/30 border-cyan-500/60 text-cyan-200"
-                              : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
-                          )}
-                          title="Привязка курсора: курсор привязывается к ближайшей точке данных для точного чтения значений"
-                        >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="3" />
-                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                          </svg>
-                          <span className="hidden sm:inline">Привязка</span>
-                        </button>
-                        <button
-                          onClick={() => setShowFloatingPanel(prev => !prev)}
-                          className={cn(
-                            "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
-                            showFloatingPanel
-                              ? "bg-indigo-500/30 border-indigo-500/60 text-indigo-200"
-                              : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
-                          )}
-                          title="Панель данных: показывает значения в точке курсора (перетаскиваемая)"
-                        >
-                          <Grid3X3 className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Панель</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Zoom Group */}
-                    <div className="flex items-center gap-1 px-2 py-1 bg-slate-800/50 rounded-lg border border-white/5">
-                      <button
-                        onClick={() => {
-                          if (!timeRange) return;
-                          const currentMin = chartZoom?.min ?? timeRange.start;
-                          const currentMax = chartZoom?.max ?? timeRange.end;
-                          const currentRange = currentMax - currentMin;
-                          const center = (currentMin + currentMax) / 2;
-                          const newRange = currentRange * 0.7;
-                          setChartZoom({ min: center - newRange / 2, max: center + newRange / 2 });
-                        }}
-                        className="p-1.5 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg border border-blue-500/30 transition-colors active:scale-95"
-                        title="Увеличить масштаб"
-                      >
-                        <ZoomIn className="w-4 h-4 text-blue-300" />
-                      </button>
-                      <button
-                        onClick={resetZoom}
-                        className="p-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600 transition-colors active:scale-95"
-                        title="Сбросить масштаб"
-                      >
-                        <ZoomOut className="w-4 h-4 text-slate-400" />
-                      </button>
-                    </div>
-
                   </div>
 
                   {/* Toggle chips - grouped by data type */}
@@ -1513,7 +1420,7 @@ function App() {
               {/* Chart Area with interactive controls */}
               <div 
                 ref={chartContainerRef} 
-                className="p-5 cursor-grab active:cursor-grabbing select-none touch-none"
+                className="relative p-5 cursor-grab active:cursor-grabbing select-none touch-none"
                 onMouseDown={handleChartMouseDown}
                 onMouseMove={handleChartMouseMove}
                 onMouseUp={handleChartMouseUp}
@@ -1525,6 +1432,97 @@ function App() {
                 onTouchEnd={handleChartTouchEnd}
                 onClick={() => showFloatingPanel && setFloatingPanelFrozen(prev => !prev)}
               >
+                {/* Chart Controls Overlay */}
+                <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 bg-slate-900/80 backdrop-blur-xl rounded-xl border border-white/10 p-3 shadow-xl pointer-events-auto">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setChartView('line')}
+                      className={cn(
+                        "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
+                        chartView === 'line'
+                          ? "bg-blue-500/30 border-blue-500/60 text-blue-200"
+                          : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
+                      )}
+                      title="Линейный график: Показывает данные как непрерывные линии во времени"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                      </svg>
+                      <span className="hidden sm:inline">Линия</span>
+                    </button>
+                    <button
+                      onClick={() => setChartView('scatter')}
+                      className={cn(
+                        "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
+                        chartView === 'scatter'
+                          ? "bg-purple-500/30 border-purple-500/60 text-purple-200"
+                          : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
+                      )}
+                      title="Точечная диаграмма: Показывает зависимости между параметрами (например, скорость vs мощность)"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="1" />
+                        <circle cx="19" cy="5" r="1" />
+                        <circle cx="5" cy="19" r="1" />
+                      </svg>
+                      <span className="hidden sm:inline">Точки</span>
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setChartSnapMode(prev => !prev)}
+                    className={cn(
+                      "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
+                      chartSnapMode
+                        ? "bg-cyan-500/30 border-cyan-500/60 text-cyan-200"
+                        : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
+                    )}
+                    title="Привязка курсора: курсор привязывается к ближайшей точке данных для точного чтения значений (включено) / свободное перемещение курсора (выключено)"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                    </svg>
+                    <span className="hidden sm:inline">Привязка</span>
+                  </button>
+                  <button
+                    onClick={() => setShowFloatingPanel(prev => !prev)}
+                    className={cn(
+                      "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
+                      showFloatingPanel
+                        ? "bg-pink-500/30 border-pink-500/60 text-pink-200"
+                        : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
+                    )}
+                    title="Показать панель данных: отображает значения всех параметров в точке под курсором"
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Данные</span>
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        if (!timeRange) return;
+                        const currentMin = chartZoom?.min ?? timeRange.start;
+                        const currentMax = chartZoom?.max ?? timeRange.end;
+                        const currentRange = currentMax - currentMin;
+                        const center = (currentMin + currentMax) / 2;
+                        const newRange = currentRange * 0.7;
+                        setChartZoom({ min: center - newRange / 2, max: center + newRange / 2 });
+                      }}
+                      className="p-1.5 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg border border-blue-500/30 transition-colors active:scale-95"
+                      title="Увеличить масштаб: приблизить к центру текущего видимого диапазона на 30%"
+                    >
+                      <ZoomIn className="w-4 h-4 text-blue-300" />
+                    </button>
+                    <button
+                      onClick={resetZoom}
+                      className="p-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600 transition-colors active:scale-95"
+                      title="Сбросить масштаб: вернуть полный вид всей поездки"
+                    >
+                      <ZoomOut className="w-4 h-4 text-slate-400" />
+                    </button>
+                  </div>
+                </div>
+
                 <div className="h-[450px] w-full">
                   {chartView === 'line' ? (
                     <Line

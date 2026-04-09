@@ -14,8 +14,7 @@ import {
   Filler
 } from 'chart.js';
 import { parseTripData, calculateSummary, downsample, filterData, defaultFilterConfig, type DataFilterConfig } from './utils/parser';
-import { detectAccelerations } from './utils/acceleration';
-import type { TripEntry, TripSummary, AccelerationAttempt } from './types';
+import type { TripEntry, TripSummary } from './types';
 import { AccelerationTab } from './components/AccelerationTab';
 import {
   Activity, Clock, Settings, Eye, EyeOff, Grid3X3, ZoomIn, ZoomOut, Play, Upload, BarChart
@@ -30,6 +29,7 @@ import { TripOverview } from './components/TripOverview';
 import { i18n } from './i18n';
 import { useChartOptions } from './hooks/useChartOptions';
 import { useChartState } from './hooks/useChartState';
+import useAccelerationState from './hooks/useAccelerationState';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -169,11 +169,8 @@ function App() {
     maxTemp: false,
   });
 
-  // Acceleration state
-  const [accelerationAttempts, setAccelerationAttempts] = useState<AccelerationAttempt[]>([]);
-  const [showIncomplete, setShowIncomplete] = useState<boolean>(false);
-  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set(['time', 'distance', 'averagePower', 'peakPower', 'batteryDrop']));
-  const [accelerationThreshold, setAccelerationThreshold] = useState<number>(60);
+  // Acceleration state - extracted to useAccelerationState hook
+  const { accelerationAttempts, accelerationThreshold, setAccelerationThreshold, showIncomplete, setShowIncomplete, selectedColumns, setSelectedColumns, clearSettings } = useAccelerationState(data);
 
   // Active tab state
   const [activeTab, setActiveTab] = useState<'charts' | 'acceleration'>('charts');
@@ -697,11 +694,6 @@ function App() {
     setChartZoom({ min: newMin, max: newMax });
   }, [timeRange, chartZoom]);
 
-  // Memoize acceleration detection to prevent re-detection on unnecessary re-renders
-  const accelerationAttemptsMemoized = useMemo(() => {
-    return detectAccelerations(data, accelerationThreshold);
-  }, [data, accelerationThreshold]);
-
   const handleFile = (file: File) => {
     if (!file.name.endsWith('.csv')) {
       alert(i18n.t('uploadError'));
@@ -715,7 +707,6 @@ function App() {
       const parsedData = parseTripData(text);
       setData(parsedData);
       setSummary(calculateSummary(parsedData));
-      setAccelerationAttempts(accelerationAttemptsMemoized);
       resetZoom(); // Reset zoom on new file load
       // Reset time range
       if (parsedData.length > 0) {
@@ -1817,6 +1808,7 @@ function App() {
                     });
                   }}
                   data={data}
+                  clearSettings={clearSettings}
                 />
               </div>
             </div>

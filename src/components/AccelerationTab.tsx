@@ -35,6 +35,7 @@ interface AccelerationTabProps {
   onShowIncompleteToggle: () => void;
   onColumnToggle: (column: string) => void;
   data: TripEntry[];
+  clearSettings?: () => void;
 }
 
 const PRESET_COLORS = {
@@ -65,6 +66,7 @@ export const AccelerationTab = memo(({
   onShowIncompleteToggle,
   onColumnToggle,
   data,
+  clearSettings,
 }: AccelerationTabProps) => {
   const [selectedPresets, setSelectedPresets] = useState<Set<string>>(new Set());
 
@@ -205,9 +207,26 @@ export const AccelerationTab = memo(({
 
   return (
     <div className="space-y-4">
+      {/* Header with clear settings button */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-slate-400 font-medium">Выберите диапазоны для графика:</span>
+        {clearSettings && (
+          <button
+            onClick={() => {
+              if (confirm('Очистить настройки ускорения? Это сбросит порог и выбранные колонки к значениям по умолчанию.')) {
+                clearSettings();
+                alert('Настройки очищены');
+              }
+            }}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700/50 border border-slate-600 text-slate-400 hover:bg-slate-600/70 hover:border-slate-500 transition-all"
+          >
+            Очистить настройки
+          </button>
+        )}
+      </div>
+
       {/* Preset selector */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-slate-400 font-medium">Выберите диапазоны для графика:</span>
         <div className="flex flex-wrap gap-2">
           {PRESETS.map((preset) => {
             const attemptCount = preset.id === 'custom'

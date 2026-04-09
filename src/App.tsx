@@ -14,7 +14,7 @@ import {
   Filler
 } from 'chart.js';
 import { parseTripData, calculateSummary, downsample, filterData, defaultFilterConfig, type DataFilterConfig } from './utils/parser';
-import type { TripEntry, TripSummary } from './types';
+import type { TripEntry, TripSummary, AccelerationAttempt } from './types';
 import { AccelerationTab } from './components/AccelerationTab';
 import {
   Activity, Clock, Settings, Eye, EyeOff, Grid3X3, ZoomIn, ZoomOut, Play, Upload, BarChart
@@ -170,7 +170,31 @@ function App() {
   });
 
   // Acceleration state - extracted to useAccelerationState hook
-  const { accelerationAttempts, accelerationThreshold, setAccelerationThreshold, showIncomplete, setShowIncomplete, selectedColumns, setSelectedColumns, clearSettings } = useAccelerationState(data);
+  const { accelerationAttempts, thresholdPairs, setThresholdPairs, showIncomplete, setShowIncomplete, selectedColumns, setSelectedColumns, clearSettings } = useAccelerationState(data);
+
+  // Comparison mode state
+  const [selectedAttempts, setSelectedAttempts] = useState<Set<string>>(new Set());
+
+  const toggleSelection = useCallback((attemptId: string) => {
+    setSelectedAttempts(prev => {
+      const next = new Set(prev);
+      if (next.has(attemptId)) {
+        next.delete(attemptId);
+      } else {
+        next.add(attemptId);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedAttempts(new Set());
+  }, []);
+
+  const getBestAttempt = useCallback((attempts: AccelerationAttempt[]): AccelerationAttempt | null => {
+    if (attempts.length === 0) return null;
+    return attempts.reduce((best, current) => current.time < best.time ? current : best);
+  }, []);
 
   // Active tab state
   const [activeTab, setActiveTab] = useState<'charts' | 'acceleration'>('charts');

@@ -879,6 +879,12 @@ function App() {
 
   // Combined chart data with toggles - only constructs final datasets object
   const combinedChartData = useMemo(() => {
+    // Return acceleration data in acceleration mode
+    if (chartMode === 'acceleration') {
+      return accelerationChartData;
+    }
+
+    // Return telemetry data in telemetry mode (existing implementation)
     const datasets: Array<{
       label: string;
       data: Array<{ x: number; y: number | null | undefined }>;
@@ -1007,7 +1013,7 @@ function App() {
     }
 
     return { datasets };
-  }, [chartDatasets, chartToggles, displayData]);
+  }, [chartMode, chartDatasets, chartToggles, displayData, accelerationChartData]);
 
   // Export full page as PNG image using html-to-image
   const handleShareStats = async () => {

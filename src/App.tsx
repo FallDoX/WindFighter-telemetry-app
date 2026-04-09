@@ -1194,16 +1194,18 @@ function App() {
           </>
         ) : data.length > 0 && summary ? (
           <>
-            <TripOverview
-              summary={filteredSummary!}
-              visibleMetrics={visibleMetrics}
-              showSettings={showSettings}
-              onSettingsToggle={() => setShowSettings(!showSettings)}
-              onVisibleMetricsChange={(key) => setVisibleMetrics(prev => ({ ...prev, [key]: !prev[key] }))}
-            />
+            {/* Trip Data Section - Overview and Telemetry */}
+            <div className="space-y-6">
+              <TripOverview
+                summary={filteredSummary!}
+                visibleMetrics={visibleMetrics}
+                showSettings={showSettings}
+                onSettingsToggle={() => setShowSettings(!showSettings)}
+                onVisibleMetricsChange={(key) => setVisibleMetrics(prev => ({ ...prev, [key]: !prev[key] }))}
+              />
 
-            {/* Main Chart with Built-in Time Range & Zoom */}
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 mb-8 shadow-lg">
+              {/* Main Chart with Built-in Time Range & Zoom */}
+              <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 shadow-lg">
               {/* Header with tabs and controls */}
               <div className="p-5 border-b border-white/10">
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
@@ -1265,12 +1267,12 @@ function App() {
                               setShowFilterDropdown(prev => !prev);
                             }}
                             className={cn(
-                              "p-1.5 rounded-lg hover:bg-white/10 transition-colors ml-1 cursor-pointer",
+                              "p-2 rounded-lg hover:bg-white/10 transition-colors ml-1 cursor-pointer",
                               showFilterDropdown && "bg-white/10"
                             )}
                             title="Настройки фильтра"
                           >
-                            <Settings className="w-3.5 h-3.5" />
+                            <Settings className="w-4 h-4" />
                           </div>
                         </button>
                         {showFilterDropdown && (
@@ -1818,6 +1820,7 @@ function App() {
                 )}
                 </div>
               </div>
+            </div>
 
             {/* Floating Data Panel - draggable overlay */}
             <FloatingDataPanel

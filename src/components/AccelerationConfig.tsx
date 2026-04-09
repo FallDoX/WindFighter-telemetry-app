@@ -25,8 +25,8 @@ const AccelerationConfig = memo(({
   const presets = [
     { from: 0, to: 25, label: '0-25' },
     { from: 0, to: 60, label: '0-60' },
-    { from: 30, to: 100, label: '30-100' },
-    { from: 60, to: 120, label: '60-120' },
+    { from: 0, to: 90, label: '0-90' },
+    { from: 0, to: 100, label: '0-100' },
   ];
 
   const handleFromSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {

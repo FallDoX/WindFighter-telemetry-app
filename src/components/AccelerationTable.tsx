@@ -22,6 +22,8 @@ interface AccelerationTableProps {
   selectedColumns: Set<string>;
   onShowIncompleteToggle: () => void;
   onColumnToggle: (column: string) => void;
+  onSelectionToggle?: (attemptId: string) => void;
+  selectedAttempts?: Set<string>;
 }
 
 const columnLabels: Record<string, string> = {
@@ -36,6 +38,7 @@ const columnLabels: Record<string, string> = {
   startSpeed: 'Начальная скорость (км/ч)',
   endSpeed: 'Конечная скорость (км/ч)',
   targetSpeed: 'Целевая скорость (км/ч)',
+  thresholdPair: 'Порог',
 };
 
 export const AccelerationTable = memo(({
@@ -44,6 +47,8 @@ export const AccelerationTable = memo(({
   selectedColumns,
   onShowIncompleteToggle,
   onColumnToggle,
+  onSelectionToggle,
+  selectedAttempts,
 }: AccelerationTableProps) => {
   const filteredAttempts = showIncomplete
     ? accelerationAttempts
@@ -125,6 +130,7 @@ export const AccelerationTable = memo(({
           <Table>
             <TableHeader>
               <TableRow className="border-white/10">
+                {onSelectionToggle && <TableHead className="text-slate-300 font-medium w-10"></TableHead>}
                 <TableHead className="text-slate-300 font-medium">№</TableHead>
                 {visibleColumns.map((col) => (
                   <TableHead key={col} className="text-slate-300 font-medium">
@@ -142,6 +148,16 @@ export const AccelerationTable = memo(({
                     !attempt.isComplete && "text-slate-400"
                   )}
                 >
+                  {onSelectionToggle && (
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedAttempts?.has(attempt.id) || false}
+                        onChange={() => onSelectionToggle(attempt.id)}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="text-slate-300">{index + 1}</TableCell>
                   {visibleColumns.map((col) => (
                     <TableCell key={col} className={cn(
@@ -158,6 +174,7 @@ export const AccelerationTable = memo(({
                       {col === 'startSpeed' && `${attempt.startSpeed.toFixed(1)}`}
                       {col === 'endSpeed' && `${attempt.endSpeed.toFixed(1)}`}
                       {col === 'targetSpeed' && `${attempt.targetSpeed.toFixed(1)}`}
+                      {col === 'thresholdPair' && `${attempt.thresholdPair.from}-${attempt.thresholdPair.to}`}
                     </TableCell>
                   ))}
                 </TableRow>

@@ -322,6 +322,7 @@ export interface DataFilterConfig {
   stuckGpsPoints: number;
   distanceRollbackM: number;
   wheelSpeedLimitKmh: number;
+  speedJumpAccelMs2: number;
 }
 
 export const defaultFilterConfig: DataFilterConfig = {
@@ -346,6 +347,7 @@ export const defaultFilterConfig: DataFilterConfig = {
   stuckGpsPoints: 10,
   distanceRollbackM: 10,
   wheelSpeedLimitKmh: 250,
+  speedJumpAccelMs2: 20,
 };
 
 export function filterData(data: TripEntry[], config: DataFilterConfig = defaultFilterConfig): { filtered: TripEntry[]; removed: number; issues: string[] } {
@@ -466,6 +468,21 @@ export function filterData(data: TripEntry[], config: DataFilterConfig = default
       issues.push(`Wheel speed ${entry.Speed.toFixed(1)} km/h exceeds limit ${config.wheelSpeedLimitKmh} km/h at index ${index}`);
       removed++;
       return false;
+    }
+
+    // Check speed jump rate (acceleration) - filter unrealistic acceleration
+    if (index > 0 && config.speedJumpAccelMs2 > 0) {
+      const prevEntry = data[index - 1];
+      const timeDiff = (entry.timestamp - prevEntry.timestamp) / 1000; // seconds
+      if (timeDiff > 0 && timeDiff < 5) { // Only check for small time gaps (<5s)
+        const speedDiff = (entry.Speed - prevEntry.Speed) * 1000 / 3600; // km/h to m/s
+        const acceleration = speedDiff / timeDiff; // m/s²
+        if (Math.abs(acceleration) > config.speedJumpAccelMs2) {
+          issues.push(`Speed jump ${acceleration.toFixed(1)} m/s² exceeds limit ${config.speedJumpAccelMs2} m/s² at index ${index}`);
+          removed++;
+          return false;
+        }
+      }
     }
 
     return true;

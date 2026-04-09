@@ -1312,7 +1312,7 @@ function App() {
                                       <div className="relative">
                                         <input
                                           type="range"
-                                          min="10"
+                                          min="0"
                                           max="500"
                                           step="5"
                                           value={filterConfig.gpsTeleportSpeedKmh}
@@ -1321,7 +1321,7 @@ function App() {
                                           aria-label="Лимит GPS скорости в км/ч"
                                         />
                                         <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                                          <span>10</span>
+                                          <span>0</span>
                                           <span>500</span>
                                         </div>
                                       </div>
@@ -1343,7 +1343,7 @@ function App() {
                                     <div className="relative">
                                       <input
                                         type="range"
-                                        min="50"
+                                        min="0"
                                         max="300"
                                         step="5"
                                         value={filterConfig.wheelSpeedLimitKmh}
@@ -1352,7 +1352,7 @@ function App() {
                                         aria-label="Лимит скорости колеса в км/ч"
                                       />
                                       <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                                        <span>50</span>
+                                        <span>0</span>
                                         <span>300</span>
                                       </div>
                                     </div>

@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Eye, EyeOff, Grid3X3 } from 'lucide-react';
+import { Eye, EyeOff, Grid3X3, Star } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import {
@@ -87,8 +87,9 @@ export const AccelerationTable = memo(({
             onClick={() => {
               essentialColumns.forEach(col => onColumnToggle(col));
             }}
-            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20"
           >
+            <Star className="w-3.5 h-3.5" />
             Основные
           </button>
         </div>

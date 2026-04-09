@@ -20,7 +20,8 @@ import { AccelerationTab } from './components/AccelerationTab';
 import AccelerationConfig from './components/AccelerationConfig';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  Activity, Clock, Settings, Eye, EyeOff, Grid3X3, ZoomIn, ZoomOut, Share2, Play, Upload, BarChart
+  Activity, Clock, Settings, Eye, EyeOff, Grid3X3, ZoomIn, ZoomOut, Share2, Play, Upload, BarChart,
+  Zap, Battery, Thermometer, Gauge, RotateCw
 } from 'lucide-react';
 import { throttle } from './utils/performance';
 import { clsx, type ClassValue } from 'clsx';
@@ -1229,34 +1230,34 @@ function App() {
                   </div>
 
                   {/* Chart Controls - grouped by function */}
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap">
                     {/* Data Processing Group */}
-                    <div className="flex items-center gap-1 px-2 py-1 bg-slate-800/50 rounded-lg border border-white/5">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-xl border border-white/5">
                       <button
                         onClick={() => setHideIdlePeriods(prev => !prev)}
                         className={cn(
-                          "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
+                          "px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-2",
                           hideIdlePeriods
                             ? "bg-emerald-500/30 border-emerald-500/60 text-emerald-200"
                             : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
                         )}
                         title="Скрыть простои: убирает стоянки (скорость <5 км/ч >30 сек)"
                       >
-                        <Clock className="w-3.5 h-3.5" />
+                        <Clock className="w-4 h-4" />
                         <span className="hidden sm:inline">{i18n.t('hideIdlePeriods')}</span>
                       </button>
                       <div className="relative">
                         <button
                           onClick={() => setFilterConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
                           className={cn(
-                            "px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-1.5",
+                            "px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center gap-2",
                             filterConfig.enabled
                               ? "bg-amber-500/30 border-amber-500/60 text-amber-200"
                               : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
                           )}
                           title="Фильтр данных: удаляет аномалии GPS и разрывы времени"
                         >
-                          <Activity className="w-3.5 h-3.5" />
+                          <Activity className="w-4 h-4" />
                           <span className="hidden sm:inline">{i18n.t('dataFilter')}</span>
                           <div
                             onClick={(e) => {
@@ -1264,57 +1265,89 @@ function App() {
                               setShowFilterDropdown(prev => !prev);
                             }}
                             className={cn(
-                              "p-1 rounded hover:bg-white/10 transition-colors ml-1 cursor-pointer",
+                              "p-1.5 rounded-lg hover:bg-white/10 transition-colors ml-1 cursor-pointer",
                               showFilterDropdown && "bg-white/10"
                             )}
                             title="Настройки фильтра"
                           >
-                            <Settings className="w-3 h-3" />
+                            <Settings className="w-3.5 h-3.5" />
                           </div>
                         </button>
                         {showFilterDropdown && (
-                          <div className="absolute top-full left-0 mt-2 w-72 bg-slate-900/95 backdrop-blur-xl rounded-xl border border-white/10 shadow-xl z-50 p-4 space-y-3">
-                            <span className="text-xs font-semibold text-slate-300">Настройки фильтра</span>
-                            <p className="text-xs text-slate-400 leading-relaxed">
-                              Фильтр удаляет аномалии: резкие скачки GPS скорости выше лимита и разрывы во времени между точками данных.
-                            </p>
+                          <div className="absolute top-full left-0 mt-2 w-96 bg-slate-900/95 backdrop-blur-xl rounded-xl border border-white/10 shadow-xl z-50 p-5 space-y-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Settings className="w-4 h-4 text-slate-400" />
+                                <span className="text-sm font-semibold text-slate-200">Настройки фильтра</span>
+                              </div>
+                              <p className="text-xs text-slate-400 leading-relaxed">
+                                Удаляет аномалии: скачки GPS скорости выше лимита и разрывы во времени между точками данных.
+                              </p>
+                            </div>
                             {filterConfig.enabled && (
                               <>
-                                <div>
-                                  <div className="flex justify-between items-center mb-1">
-                                    <label className="text-xs text-slate-400">Разрыв времени</label>
-                                    <span className="text-xs text-amber-400 font-medium">{filterConfig.maxTimeGapSeconds} сек</span>
-                                  </div>
-                                  <input
-                                    type="range"
-                                    min="1"
-                                    max="60"
-                                    value={filterConfig.maxTimeGapSeconds}
-                                    onChange={(e) => setFilterConfig(prev => ({ ...prev, maxTimeGapSeconds: parseInt(e.target.value) }))}
-                                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                                  />
-                                </div>
-                                {displayData[0]?.GPSSpeed !== undefined && (
+                                <div className="space-y-3">
                                   <div>
-                                    <div className="flex justify-between items-center mb-1">
-                                      <label className="text-xs text-slate-400">GPS скорость лимит</label>
-                                      <span className="text-xs text-red-400 font-medium">{filterConfig.gpsTeleportSpeedKmh} км/ч</span>
+                                    <div className="flex justify-between items-center mb-2">
+                                      <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                        Разрыв времени
+                                      </label>
+                                      <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
+                                        {filterConfig.maxTimeGapSeconds} сек
+                                      </span>
                                     </div>
-                                    <input
-                                      type="range"
-                                      min="10"
-                                      max="500"
-                                      step="5"
-                                      value={filterConfig.gpsTeleportSpeedKmh}
-                                      onChange={(e) => setFilterConfig(prev => ({ ...prev, gpsTeleportSpeedKmh: parseInt(e.target.value) }))}
-                                      className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500"
-                                    />
+                                    <div className="relative">
+                                      <input
+                                        type="range"
+                                        min="1"
+                                        max="60"
+                                        value={filterConfig.maxTimeGapSeconds}
+                                        onChange={(e) => setFilterConfig(prev => ({ ...prev, maxTimeGapSeconds: parseInt(e.target.value) }))}
+                                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                      />
+                                      <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                                        <span>1с</span>
+                                        <span>60с</span>
+                                      </div>
+                                    </div>
                                   </div>
-                                )}
+                                  {displayData[0]?.GPSSpeed !== undefined && (
+                                    <div>
+                                      <div className="flex justify-between items-center mb-2">
+                                        <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                                          <Activity className="w-3.5 h-3.5 text-red-400" />
+                                          GPS скорость лимит
+                                        </label>
+                                        <span className="text-xs font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded">
+                                          {filterConfig.gpsTeleportSpeedKmh} км/ч
+                                        </span>
+                                      </div>
+                                      <div className="relative">
+                                        <input
+                                          type="range"
+                                          min="10"
+                                          max="500"
+                                          step="5"
+                                          value={filterConfig.gpsTeleportSpeedKmh}
+                                          onChange={(e) => setFilterConfig(prev => ({ ...prev, gpsTeleportSpeedKmh: parseInt(e.target.value) }))}
+                                          className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500"
+                                        />
+                                        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                                          <span>10</span>
+                                          <span>500</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </>
                             )}
                             {!filterConfig.enabled && (
-                              <p className="text-xs text-slate-500">Включите фильтр для настройки параметров</p>
+                              <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-800/50 p-3 rounded-lg">
+                                <Activity className="w-4 h-4" />
+                                <span>Включите фильтр для настройки параметров</span>
+                              </div>
                             )}
                           </div>
                         )}

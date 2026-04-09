@@ -209,19 +209,38 @@ export const AccelerationTab = memo(({
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-slate-400 font-medium">Выберите диапазоны для графика:</span>
         <div className="flex flex-wrap gap-2">
-          {PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => togglePreset(preset.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                selectedPresets.has(preset.id)
-                  ? `${PRESET_COLORS[preset.id as keyof typeof PRESET_COLORS]}20 border ${PRESET_COLORS[preset.id as keyof typeof PRESET_COLORS]}50 text-white`
-                  : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              {preset.label}
-            </button>
-          ))}
+          {PRESETS.map((preset) => {
+            const attemptCount = preset.id === 'custom'
+              ? accelerationAttempts.length
+              : accelerationAttempts.filter(
+                  attempt => Math.abs(attempt.startSpeed - preset.from) < 1 && Math.abs(attempt.endSpeed - preset.to) < 1
+                ).length;
+
+            return (
+              <button
+                key={preset.id}
+                onClick={() => togglePreset(preset.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border relative ${
+                  selectedPresets.has(preset.id)
+                    ? `${PRESET_COLORS[preset.id as keyof typeof PRESET_COLORS]}20 border ${PRESET_COLORS[preset.id as keyof typeof PRESET_COLORS]}50 text-white`
+                    : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  {preset.label}
+                  {attemptCount > 0 && (
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      selectedPresets.has(preset.id)
+                        ? 'bg-white/20'
+                        : 'bg-slate-600'
+                    }`}>
+                      {attemptCount}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </div>
         {selectedPresets.has('custom') && (
           <span className="text-xs text-slate-500">

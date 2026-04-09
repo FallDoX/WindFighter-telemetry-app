@@ -36,7 +36,7 @@ Implement basic acceleration detection algorithm and display results in table fo
 
 ### Incomplete Attempts
 
-**Handling:** Ignore incomplete attempts - only show full acceleration attempts where target speed threshold is reached. If speed starts at 0 and reaches 50 km/h but target is 60 km/h, do not show this attempt.
+**Handling:** Show incomplete attempts (where target speed threshold is not reached) in a different color (e.g., gray or muted) with a toggle to show/hide them. Default: hidden. If speed starts at 0 and reaches 50 km/h but target is 60 km/h, show this attempt as incomplete when toggle is enabled.
 
 ### Default Threshold
 

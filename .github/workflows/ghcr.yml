@@ -1,4 +1,4 @@
-name: wfeucapp GHCR build & publish
+name: GHCR build & publish
 
 on:
   push:

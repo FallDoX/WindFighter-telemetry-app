@@ -87,7 +87,7 @@ Phase 3 adds acceleration visualization to the Trip Telemetry chart as a mode sw
 <deferred>
 ## Deferred Ideas
 
-None - all decisions captured.
+- **Wheel spin detection (раскрут колеса)** - Detect when wheel is spinning but scooter isn't moving much (low current, high speed). This requires a new detection algorithm and should be a separate phase after acceleration visualization is complete.
 
 </deferred>
 

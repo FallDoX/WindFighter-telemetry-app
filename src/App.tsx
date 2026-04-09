@@ -217,6 +217,11 @@ function App() {
       if (next.has(attemptIndex)) {
         next.delete(attemptIndex);
       } else {
+        // Limit selection to 10 attempts
+        if (next.size >= 10) {
+          alert('Максимум 10 попыток для отображения');
+          return prev;
+        }
         next.add(attemptIndex);
       }
       return next;

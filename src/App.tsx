@@ -145,6 +145,7 @@ function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string>('');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [showTelemetryToggles, setShowTelemetryToggles] = useState(true);
 
   // Time range state
   const [timeRange, setTimeRange] = useState<{ start: number; end: number } | null>(null);
@@ -1373,7 +1374,16 @@ function App() {
                   </div>
 
                   {/* Toggle chips - grouped by data type */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => setShowTelemetryToggles(prev => !prev)}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors w-fit"
+                    >
+                      {showTelemetryToggles ? <Settings className="w-3.5 h-3.5 rotate-[180deg]" /> : <Settings className="w-3.5 h-3.5 rotate-[-90deg]" />}
+                      <span>Данные графика</span>
+                    </button>
+                    {showTelemetryToggles && (
+                      <div className="flex flex-wrap gap-2">
                     {/* Speed */}
                     <div className="flex items-center gap-1 px-2 py-1 bg-slate-800/30 rounded-lg border border-white/5">
                       <ToggleChip label={i18n.t('speed')} active={chartToggles.speed} onClick={() => setChartToggles(p => ({...p, speed: !p.speed}))} color="blue" />
@@ -1404,6 +1414,8 @@ function App() {
                       <ToggleChip label={i18n.t('torque')} active={chartToggles.torque} onClick={() => setChartToggles(p => ({...p, torque: !p.torque}))} color="purple" />
                     )}
                     <ToggleChip label={i18n.t('pwm')} active={chartToggles.pwm} onClick={() => setChartToggles(p => ({...p, pwm: !p.pwm}))} color="blue" />
+                      </div>
+                    )}
                   </div>
 
                   {/* Compact help hints */}
@@ -1449,7 +1461,7 @@ function App() {
                           ? "bg-blue-500/30 border-blue-500/60 text-blue-200"
                           : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
                       )}
-                      title="Линейный график: Показывает данные как непрерывные линии во времени"
+                      title="Линейный график: Показывает данные как непрерывные линии во времени. Идеально для анализа трендов скорости, мощности и других параметров во время поездки."
                     >
                       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -1464,7 +1476,7 @@ function App() {
                           ? "bg-purple-500/30 border-purple-500/60 text-purple-200"
                           : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
                       )}
-                      title="Точечная диаграмма: Показывает зависимости между параметрами (например, скорость vs мощность)"
+                      title="Точечная диаграмма: Показывает зависимости между параметрами (например, скорость vs мощность). Полезно для выявления корреляций и аномалий в данных."
                     >
                       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <circle cx="12" cy="12" r="1" />
@@ -1482,7 +1494,7 @@ function App() {
                         ? "bg-cyan-500/30 border-cyan-500/60 text-cyan-200"
                         : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
                     )}
-                    title="Привязка курсора: курсор привязывается к ближайшей точке данных для точного чтения значений (включено) / свободное перемещение курсора (выключено)"
+                    title={`Привязка курсора: ${chartSnapMode ? 'курсор привязывается к ближайшей точке данных для точного чтения значений (включено)' : 'свободное перемещение курсора без привязки к точкам (выключено)'}. Полезно для точного анализа значений в конкретные моменты времени.`}
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="12" cy="12" r="3" />
@@ -1498,7 +1510,7 @@ function App() {
                         ? "bg-pink-500/30 border-pink-500/60 text-pink-200"
                         : "bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700"
                     )}
-                    title="Показать панель данных: отображает значения всех параметров в точке под курсором"
+                    title={`Показать инфо-шкалу данных: ${showInfoBar ? 'отображает значения всех параметров в точке под курсором (включено)' : 'скрывает инфо-шкалу для более чистого вида графика (выключено)'}. Расположена вверху графика для удобного чтения значений.`}
                   >
                     <Activity className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Данные</span>
@@ -1515,14 +1527,14 @@ function App() {
                         setChartZoom({ min: center - newRange / 2, max: center + newRange / 2 });
                       }}
                       className="p-1.5 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg border border-blue-500/30 transition-colors active:scale-95"
-                      title="Увеличить масштаб: приблизить к центру текущего видимого диапазона на 30%"
+                      title="Увеличить масштаб: приблизить к центру текущего видимого диапазона на 30%. Полезно для детального анализа конкретных участков поездки."
                     >
                       <ZoomIn className="w-4 h-4 text-blue-300" />
                     </button>
                     <button
                       onClick={resetZoom}
                       className="p-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600 transition-colors active:scale-95"
-                      title="Сбросить масштаб: вернуть полный вид всей поездки"
+                      title="Сбросить масштаб: вернуть полный вид всей поездки от начала до конца. Возвращает к исходному масштабу для обзора всей поездки."
                     >
                       <ZoomOut className="w-4 h-4 text-slate-400" />
                     </button>
@@ -1628,7 +1640,7 @@ function App() {
                           }
                         },
                         onHover: throttle((_event: unknown, activeElements: unknown[]) => {
-                          if (!showFloatingPanel || floatingPanelFrozen || !activeElements.length) return;
+                          if (!activeElements.length) return;
 
                           const dataIndex = (activeElements as { index: number }[])[0].index;
                           const dataPoint = displayData[dataIndex];

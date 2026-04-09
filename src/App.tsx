@@ -1294,21 +1294,23 @@ function App() {
                                     className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
                                   />
                                 </div>
-                                <div>
-                                  <div className="flex justify-between items-center mb-1">
-                                    <label className="text-xs text-slate-400">GPS скорость лимит</label>
-                                    <span className="text-xs text-red-400 font-medium">{filterConfig.gpsTeleportSpeedKmh} км/ч</span>
+                                {displayData[0]?.GPSSpeed !== undefined && (
+                                  <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                      <label className="text-xs text-slate-400">GPS скорость лимит</label>
+                                      <span className="text-xs text-red-400 font-medium">{filterConfig.gpsTeleportSpeedKmh} км/ч</span>
+                                    </div>
+                                    <input
+                                      type="range"
+                                      min="10"
+                                      max="500"
+                                      step="5"
+                                      value={filterConfig.gpsTeleportSpeedKmh}
+                                      onChange={(e) => setFilterConfig(prev => ({ ...prev, gpsTeleportSpeedKmh: parseInt(e.target.value) }))}
+                                      className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500"
+                                    />
                                   </div>
-                                  <input
-                                    type="range"
-                                    min="10"
-                                    max="500"
-                                    step="5"
-                                    value={filterConfig.gpsTeleportSpeedKmh}
-                                    onChange={(e) => setFilterConfig(prev => ({ ...prev, gpsTeleportSpeedKmh: parseInt(e.target.value) }))}
-                                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500"
-                                  />
-                                </div>
+                                )}
                               </>
                             )}
                             {!filterConfig.enabled && (
@@ -1471,7 +1473,9 @@ function App() {
                   {/* Toggle chips */}
                   <div className="flex flex-wrap gap-2">
                     <ToggleChip label={i18n.t('speed')} active={chartToggles.speed} onClick={() => setChartToggles(p => ({...p, speed: !p.speed}))} color="blue" />
-                    <ToggleChip label={i18n.t('gpsSpeed')} active={chartToggles.gpsSpeed} onClick={() => setChartToggles(p => ({...p, gpsSpeed: !p.gpsSpeed}))} color="green" />
+                    {displayData[0]?.GPSSpeed !== undefined && (
+                      <ToggleChip label={i18n.t('gpsSpeed')} active={chartToggles.gpsSpeed} onClick={() => setChartToggles(p => ({...p, gpsSpeed: !p.gpsSpeed}))} color="green" />
+                    )}
                     <ToggleChip label={i18n.t('power')} active={chartToggles.power} onClick={() => setChartToggles(p => ({...p, power: !p.power}))} color="orange" />
                     <ToggleChip label={i18n.t('current')} active={chartToggles.current} onClick={() => setChartToggles(p => ({...p, current: !p.current}))} color="pink" />
                     {displayData[0]?.PhaseCurrent !== undefined && (

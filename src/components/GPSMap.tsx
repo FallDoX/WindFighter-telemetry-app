@@ -16,7 +16,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-function MapController({ data, currentTime }: { data: GPSMapProps['data']; currentTime?: number }) {
+function MapController({ data }: { data: GPSMapProps['data'] }) {
   const map = useMap();
 
   useEffect(() => {

@@ -1231,7 +1231,7 @@ function App() {
       {/* Background pattern */}
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent pointer-events-none" />
       
-      <div data-export-container className="relative z-10 max-w-[1600px] mx-auto px-6 py-8" onDragOver={onDragOver}>
+      <div data-export-container className="relative z-10 max-w-[1600px] mx-auto px-4 py-4 md:px-6 md:py-8" onDragOver={onDragOver}>
         {/* Modern Header */}
         <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div className="flex items-center gap-4">
@@ -1239,10 +1239,10 @@ function App() {
               <Activity className="w-7 h-7 text-white" strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+              <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
                 {i18n.t('appTitle')}
               </h1>
-              <p className="text-slate-400 text-sm">{i18n.t('appSubtitle')}</p>
+              <p className="text-slate-400 text-xs md:text-sm">{i18n.t('appSubtitle')}</p>
               {datasets.length > 0 && (
                 <div className="mt-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1347,7 +1347,7 @@ function App() {
 
         {/* Loading state */}
         {loading ? (
-          <div className="flex flex-col justify-center items-center h-96">
+          <div className="flex flex-col justify-center items-center h-64 md:h-96">
             <div className="relative">
               <div className="w-20 h-20 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
               <div className="absolute inset-0 w-20 h-20 border-4 border-purple-500/20 border-b-purple-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
@@ -1357,7 +1357,7 @@ function App() {
         ) : data.length === 0 ? (
           <>
             {/* Start page - choice between large file and small demo */}
-            <div className="flex flex-col items-center justify-center h-96 space-y-6">
+            <div className="flex flex-col items-center justify-center h-64 md:h-96 space-y-4 md:space-y-6">
               <div className="text-center space-y-3">
                 <h2 className="text-2xl font-bold text-white">Выберите режим загрузки</h2>
                 <p className="text-slate-400">Загрузите свой файл или используйте демо-данные</p>
@@ -1437,7 +1437,7 @@ function App() {
         ) : data.length > 0 && summary ? (
           <>
             {/* Trip Data Section - Overview and Telemetry */}
-            <div className="space-y-6">
+            <div className="space-y-4 md:space-y-6">
               {showMap && hasGPSData && (
                 <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 shadow-lg">
                   <div className="p-4 border-b border-white/10">
@@ -1447,7 +1447,7 @@ function App() {
                     </h3>
                   </div>
                   <div className="p-4">
-                    <GPSMap data={data} currentTime={currentTime} height="400px" />
+                    <GPSMap data={data} currentTime={currentTime} height="300px" />
                   </div>
                 </div>
               )}

@@ -124,6 +124,7 @@ const AccelerationConfig = memo(({
                       className="w-full h-8 text-xs"
                       placeholder="0"
                       aria-label="Начальная скорость порога"
+                      title="Начальная скорость для разгона (км/ч)"
                     />
                   </div>
                   <div>
@@ -136,6 +137,7 @@ const AccelerationConfig = memo(({
                       className="w-full h-8 text-xs"
                       placeholder="60"
                       aria-label="Конечная скорость порога"
+                      title="Конечная скорость для разгона (км/ч)"
                     />
                   </div>
                 </div>
@@ -196,6 +198,7 @@ const AccelerationConfig = memo(({
                   className="w-full h-8 text-xs"
                   placeholder="2500"
                   aria-label="Порог максимальной мощности в ваттах"
+                  title="Максимальная допустимая мощность при разгоне (Вт). Попытки выше будут подсвечены красным."
                 />
               </div>
               <div>
@@ -208,6 +211,7 @@ const AccelerationConfig = memo(({
                   className="w-full h-8 text-xs"
                   placeholder="45"
                   aria-label="Порог максимальной температуры в градусах Цельсия"
+                  title="Максимальная допустимая температура мотора (°C). Попытки выше будут подсвечены оранжевым."
                 />
               </div>
             </div>

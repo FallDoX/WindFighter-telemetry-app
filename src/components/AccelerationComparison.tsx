@@ -243,6 +243,13 @@ export const AccelerationComparison = memo(({
               key={filter}
               onClick={() => setComparisonFilter(filter)}
               aria-pressed={comparisonFilter === filter}
+              title={
+                filter === 'all' 
+                  ? 'Показать все выбранные попытки' 
+                  : filter === 'best' 
+                  ? `Показать лучшие ${filterLimit} попыток по времени разгона`
+                  : `Показать худшие ${filterLimit} попыток по времени разгона`
+              }
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
                 comparisonFilter === filter
                   ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'

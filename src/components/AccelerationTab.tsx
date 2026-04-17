@@ -263,6 +263,7 @@ export const AccelerationTab = memo(({
                 key={preset.id}
                 onClick={() => togglePreset(preset.id)}
                 aria-pressed={selectedPresets.has(preset.id)}
+                title={`Разгон ${preset.label} км/ч. ${attemptCount > 0 ? `Найдено попыток: ${attemptCount}` : 'Нет попыток'}`}
                 className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all border relative shadow-sm ${
                   selectedPresets.has(preset.id)
                     ? `${PRESET_COLORS[preset.id as keyof typeof PRESET_COLORS]}20 border ${PRESET_COLORS[preset.id as keyof typeof PRESET_COLORS]}60 text-white shadow-lg shadow-${PRESET_COLORS[preset.id as keyof typeof PRESET_COLORS]}/20`

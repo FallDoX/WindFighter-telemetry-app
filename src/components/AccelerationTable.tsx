@@ -50,6 +50,27 @@ const columnLabels: Record<string, string> = {
   temperatureEfficiency: 'Эфф. темп. (0-1)',
 };
 
+const columnTooltips: Record<string, string> = {
+  time: 'Время разгона от начальной до целевой скорости',
+  distance: 'Пройденное расстояние за время разгона',
+  averagePower: 'Средняя мощность во время разгона',
+  peakPower: 'Максимальная мощность во время разгона',
+  averageCurrent: 'Средний ток, потребляемый мотором',
+  averageVoltage: 'Среднее напряжение батареи',
+  batteryDrop: 'Падение заряда батареи в процентах',
+  averageTemperature: 'Средняя температура контроллера мотора',
+  startSpeed: 'Скорость в начале разгона',
+  endSpeed: 'Скорость в конце разгона',
+  targetSpeed: 'Целевая скорость порога',
+  thresholdPair: 'Диапазон скоростей для разгона',
+  powerEfficiency: 'Эффективность мощности: Вт на 1 км/ч',
+  powerConsistency: 'Стабильность мощности: 1 = идеально стабильно',
+  batteryDropRate: 'Скорость падения батареи в секунду',
+  energyPerKm: 'Энергопотребление на 1 километр',
+  temperaturePowerCorrelation: 'Корреляция между температурой и мощностью',
+  temperatureEfficiency: 'Эффективность по температуре: 1 = оптимально',
+};
+
 export const AccelerationTable = memo(({
   accelerationAttempts,
   showIncomplete,
@@ -254,10 +275,11 @@ export const AccelerationTable = memo(({
                     {onSelectionToggle && <TableHead className="text-slate-300 font-medium w-10"></TableHead>}
                     <TableHead className="text-slate-300 font-medium">№</TableHead>
                     {visibleColumns.map((col) => (
-                      <TableHead 
-                        key={col} 
+                      <TableHead
+                        key={col}
                         className="text-slate-300 font-medium cursor-pointer hover:text-slate-200 transition-colors"
                         onClick={() => handleSort(col)}
+                        title={columnTooltips[col] || columnLabels[col] || col}
                       >
                         <div className="flex items-center gap-1">
                           {columnLabels[col] || col}

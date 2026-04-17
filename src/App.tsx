@@ -19,6 +19,7 @@ import type { TripEntry, TripSummary } from './types';
 import { AccelerationTab } from './components/AccelerationTab';
 import { AccelerationComparison } from './components/AccelerationComparison';
 import { AccelerationTable } from './components/AccelerationTable';
+import { SettingsPanel } from './components/SettingsPanel';
 import {
   Activity, Clock, Settings, Eye, EyeOff, ZoomIn, ZoomOut, Play, Upload, BarChart, Lock, Unlock, ChevronRight, ChevronDown
 } from 'lucide-react';
@@ -229,6 +230,7 @@ function App() {
 
   // Panels visibility
   const [showSettings, setShowSettings] = useState(false);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
 
   // Info bar state
   const [showInfoBar, setShowInfoBar] = useState<boolean>(true);
@@ -1160,7 +1162,7 @@ function App() {
       
       <div data-export-container className="relative z-10 max-w-[1600px] mx-auto px-6 py-8" onDragOver={onDragOver}>
         {/* Modern Header */}
-        <header className="flex flex-col md:flex-row justify-center items-center mb-8 gap-4">
+        <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg shadow-blue-500/25">
               <Activity className="w-7 h-7 text-white" strokeWidth={2.5} />
@@ -1178,6 +1180,14 @@ function App() {
               )}
             </div>
           </div>
+          <button
+            onClick={() => setShowSettingsPanel(true)}
+            className="p-3 bg-slate-800/50 border border-slate-700 rounded-xl hover:bg-slate-800 transition-colors text-slate-400 hover:text-white"
+            aria-label="Открыть настройки"
+            title="Настройки"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
         </header>
 
         {/* Hidden file input for start page upload */}
@@ -2155,6 +2165,18 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* Settings Panel */}
+      <SettingsPanel
+        isOpen={showSettingsPanel}
+        onClose={() => setShowSettingsPanel(false)}
+        chartToggles={chartToggles}
+        setChartToggles={setChartToggles}
+        chartView={chartView}
+        setChartView={setChartView}
+        hideIdlePeriods={hideIdlePeriods}
+        setHideIdlePeriods={setHideIdlePeriods}
+      />
     </div>
   );
 }

@@ -2,6 +2,24 @@ import { useState, useMemo, useEffect } from 'react';
 import { detectAccelerations } from '../utils/acceleration';
 import type { TripEntry, ThresholdPair } from '../types';
 
+/**
+ * Custom hook for managing acceleration detection state and configuration.
+ *
+ * This hook handles:
+ * - Threshold configuration with presets
+ * - Column selection for display
+ * - Incomplete attempt filtering
+ * - Acceleration detection from telemetry data
+ * - localStorage persistence of settings
+ *
+ * @param data - Array of telemetry entries for acceleration detection
+ * @returns Object containing acceleration attempts and state management functions
+ *
+ * @example
+ * ```typescript
+ * const { accelerationAttempts, showIncomplete, setShowIncomplete } = useAccelerationState(tripData);
+ * ```
+ */
 export function useAccelerationState(data: TripEntry[]) {
   // Initialize thresholdPairs from localStorage with lazy initialization
   const [thresholdPairs, setThresholdPairs] = useState<ThresholdPair[]>(() => {

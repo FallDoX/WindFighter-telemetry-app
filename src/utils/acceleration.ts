@@ -1,5 +1,23 @@
 import type { TripEntry, AccelerationAttempt, ThresholdPair } from '../types.js';
 
+/**
+ * Detects acceleration attempts from telemetry data based on threshold pairs.
+ *
+ * This function analyzes speed data to identify acceleration attempts that cross
+ * specified speed thresholds. It handles multiple threshold pairs simultaneously,
+ * filters data gaps, and calculates comprehensive metrics for each attempt.
+ *
+ * @param data - Array of telemetry entries with timestamp, speed, power, current, voltage, battery, and temperature
+ * @param thresholdPairs - Array of threshold pairs (e.g., [{from: 0, to: 60}]) defining acceleration ranges to detect
+ * @returns Array of acceleration attempts with calculated metrics
+ *
+ * @example
+ * ```typescript
+ * const attempts = detectAccelerations(tripData, [{from: 0, to: 60}]);
+ * console.log(attempts[0].time); // Acceleration time in seconds
+ * console.log(attempts[0].distance); // Distance in meters
+ * ```
+ */
 export function detectAccelerations(data: TripEntry[], thresholdPairs: ThresholdPair[]): AccelerationAttempt[] {
   const attempts: AccelerationAttempt[] = [];
   

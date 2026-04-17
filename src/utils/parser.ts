@@ -68,6 +68,23 @@ function detectFormat(headers: string[]): CSVFormat {
   return 'old';
 }
 
+/**
+ * Parses CSV telemetry data and converts it to TripEntry array.
+ *
+ * This function handles both old and new CSV formats, automatically detecting
+ * the format based on column names. It validates data and converts string values
+ * to appropriate numeric types.
+ *
+ * @param csv - CSV string containing telemetry data
+ * @returns Array of TripEntry objects with parsed telemetry data
+ *
+ * @example
+ * ```typescript
+ * const entries = parseTripData(csvString);
+ * console.log(entries[0].Speed); // Speed in km/h
+ * console.log(entries[0].Power); // Power in watts
+ * ```
+ */
 export function parseTripData(csv: string): TripEntry[] {
   const result = Papa.parse(csv, {
     header: true,
@@ -340,7 +357,7 @@ export const defaultFilterConfig: DataFilterConfig = {
     Torque: { min: 0, max: 200 },
     Temp2: { min: -20, max: 100 },
   },
-  maxTimeGapSeconds: 10,
+  maxTimeGapSeconds: 1,
   gpsTeleportSpeedKmh: 300,
   gpsTeleportDistanceM: 500,
   gpsTeleportTimeS: 5,

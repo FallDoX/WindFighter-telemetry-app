@@ -1,6 +1,16 @@
 # Roadmap - Trip Log Analyzer
 
-**Last updated:** 2026-04-09
+**Last updated:** 2026-04-17
+
+## Milestone v1.0 - COMPLETE ✓
+
+**Period:** 2026-04-09 to 2026-04-17
+**Status:** Complete
+**Summary:** Comprehensive acceleration analysis features implemented.
+
+See [MILESTONE-v1.0-SUMMARY.md](MILESTONE-v1.0-SUMMARY.md) for details.
+
+---
 
 ## Phase 1: Acceleration Detection Core
 
@@ -161,6 +171,22 @@
 - 10.8 Add trip comparison history
 
 **Requirements:** REQ-047, REQ-048
+
+## Phase 8: Chart Zoom Unification
+
+**Goal:** Unify zoom behavior across all charts, resolve plugin conflicts.
+
+**Plans:**
+- 8.1 Analyze zoom conflicts between custom and plugin implementations
+- 8.2 Enhance ChartWithZoom template with plugin support
+- 8.3 Create single ChartJS registration pattern
+- 8.4 Refactor App.tsx main chart to use ChartWithZoom
+- 8.5 Refactor AccelerationTab to use ChartWithZoom
+- 8.6 Refactor AccelerationComparison to use ChartWithZoom
+- 8.7 Remove duplicate registrations and dead code
+- 8.8 Test all zoom interactions
+
+**Requirements:** UX improvement, code quality
 
 ## Phase 11: Polish and Documentation
 

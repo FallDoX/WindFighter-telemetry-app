@@ -77,6 +77,7 @@ function detectFormat(headers: string[]): CSVFormat {
  *
  * @param csv - CSV string containing telemetry data
  * @returns Array of TripEntry objects with parsed telemetry data
+ * @throws Error if CSV parsing fails or data is invalid
  *
  * @example
  * ```typescript
@@ -86,13 +87,24 @@ function detectFormat(headers: string[]): CSVFormat {
  * ```
  */
 export function parseTripData(csv: string): TripEntry[] {
+  if (!csv || csv.trim().length === 0) {
+    throw new Error('Файл пуст или содержит только пробелы');
+  }
+
   const result = Papa.parse(csv, {
     header: true,
     skipEmptyLines: true,
     dynamicTyping: true,
   });
 
-  if (!result.data || result.data.length === 0) return [];
+  if (result.errors && result.errors.length > 0) {
+    const firstError = result.errors[0];
+    throw new Error(`Ошибка CSV: ${firstError.message}`);
+  }
+
+  if (!result.data || result.data.length === 0) {
+    throw new Error('CSV файл не содержит данных');
+  }
 
   const headers = Object.keys(result.data[0] as Record<string, unknown>);
   const format = detectFormat(headers);

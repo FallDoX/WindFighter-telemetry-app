@@ -1,31 +1,12 @@
 import { memo, useState, useMemo } from 'react';
-import { Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  TimeScale,
-  Filler
-} from 'chart.js';
-import 'chartjs-adapter-date-fns';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+import { ChartWithZoom } from './ChartWithZoom';
 import type { AccelerationAttempt, TripEntry } from '../types';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  TimeScale,
-  Filler
-);
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 const ATTEMPT_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -45,6 +26,7 @@ export const AccelerationComparison = memo(({
 }: AccelerationComparisonProps) => {
   const [comparisonFilter, setComparisonFilter] = useState<'all' | 'best' | 'worst'>('all');
   const [showPowerCurve, setShowPowerCurve] = useState(false);
+  const [filterLimit, setFilterLimit] = useState(5);
 
   const selectedAttemptObjects = useMemo(() => {
     return accelerationAttempts.filter(a => selectedAttempts.has(a.id));
@@ -53,13 +35,22 @@ export const AccelerationComparison = memo(({
   const filteredAttempts = useMemo(() => {
     if (comparisonFilter === 'all') return selectedAttemptObjects;
     if (comparisonFilter === 'best') {
-      return [...selectedAttemptObjects].sort((a, b) => a.time - b.time).slice(0, 5);
+      return [...selectedAttemptObjects].sort((a, b) => a.time - b.time).slice(0, filterLimit);
     }
     if (comparisonFilter === 'worst') {
-      return [...selectedAttemptObjects].sort((a, b) => b.time - a.time).slice(0, 5);
+      return [...selectedAttemptObjects].sort((a, b) => b.time - a.time).slice(0, filterLimit);
     }
     return selectedAttemptObjects;
-  }, [selectedAttemptObjects, comparisonFilter]);
+  }, [selectedAttemptObjects, comparisonFilter, filterLimit]);
+
+  // Calculate time range (in seconds from start)
+  const timeRange = useMemo(() => {
+    let maxDuration = 0;
+    filteredAttempts.forEach(attempt => {
+      maxDuration = Math.max(maxDuration, attempt.time);
+    });
+    return maxDuration > 0 ? { start: 0, end: maxDuration } : null;
+  }, [filteredAttempts]);
 
   const bestAttempt = useMemo(() => {
     if (filteredAttempts.length === 0) return null;
@@ -87,10 +78,10 @@ export const AccelerationComparison = memo(({
 
       if (attemptData.length > 0) {
         const isBest = bestAttempt?.id === attempt.id;
-        // Speed dataset
+        // Speed dataset - normalized time (seconds from start)
         datasets.push({
           label: `#${index + 1} (${attempt.thresholdPair.from}-${attempt.thresholdPair.to} км/ч, ${attempt.time.toFixed(2)}с)`,
-          data: attemptData.map(e => ({ x: e.timestamp, y: e.Speed })),
+          data: attemptData.map(e => ({ x: (e.timestamp - attempt.startTimestamp) / 1000, y: e.Speed })),
           borderColor: ATTEMPT_COLORS[index % ATTEMPT_COLORS.length],
           backgroundColor: `${ATTEMPT_COLORS[index % ATTEMPT_COLORS.length]}20`,
           fill: false,
@@ -100,11 +91,11 @@ export const AccelerationComparison = memo(({
           yAxisID: 'y',
         });
 
-        // Power dataset (when showPowerCurve is true)
+        // Power dataset (when showPowerCurve is true) - normalized time
         if (showPowerCurve) {
           datasets.push({
             label: `#${index + 1} Мощность`,
-            data: attemptData.map(e => ({ x: e.timestamp, y: e.Power })),
+            data: attemptData.map(e => ({ x: (e.timestamp - attempt.startTimestamp) / 1000, y: e.Power })),
             borderColor: ATTEMPT_COLORS[index % ATTEMPT_COLORS.length],
             backgroundColor: `${ATTEMPT_COLORS[index % ATTEMPT_COLORS.length]}20`,
             fill: false,
@@ -131,11 +122,18 @@ export const AccelerationComparison = memo(({
     plugins: {
       legend: {
         display: true,
-        position: 'top' as const,
+        position: 'right' as const,
+        align: 'end' as const,
+        onClick: (e: any) => {
+          e.stopPropagation();
+        },
         labels: {
           color: '#94a3b8',
           font: { size: 11 },
           usePointStyle: true,
+          boxWidth: 8,
+          boxHeight: 8,
+          padding: 8,
         },
       },
       tooltip: {
@@ -148,12 +146,12 @@ export const AccelerationComparison = memo(({
     },
     scales: {
       x: {
-        type: 'time' as const,
-        time: {
-          unit: 'second' as const,
-          displayFormats: {
-            second: 'HH:mm:ss',
-          },
+        type: 'linear' as const,
+        title: {
+          display: true,
+          text: 'Время (сек)',
+          color: '#94a3b8',
+          font: { size: 11 },
         },
         grid: {
           color: 'rgba(148, 163, 184, 0.1)',
@@ -214,12 +212,22 @@ export const AccelerationComparison = memo(({
     }));
   }, [filteredAttempts, bestAttempt]);
 
+  const timelineMarkers = useMemo(() => {
+    if (!timeRange) return [];
+    return filteredAttempts.map((attempt, index) => ({
+      id: attempt.id,
+      position: attempt.time / timeRange.end,
+      color: ATTEMPT_COLORS[index % ATTEMPT_COLORS.length],
+      label: `#${index + 1}: ${attempt.time.toFixed(2)}с`,
+    }));
+  }, [filteredAttempts, timeRange]);
+
   return (
     <div className="space-y-4">
       {/* Header with filter buttons */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-center gap-3">
         <span className="text-xs text-slate-400 font-medium">Фильтр попыток:</span>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           {(['all', 'best', 'worst'] as const).map((filter) => (
             <button
               key={filter}
@@ -230,7 +238,7 @@ export const AccelerationComparison = memo(({
                   : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-600/70'
               }`}
             >
-              {filter === 'all' ? 'Все' : filter === 'best' ? 'Лучшие 5' : 'Худшие 5'}
+              {filter === 'all' ? 'Все' : filter === 'best' ? `Лучшие ${filterLimit}` : `Худшие ${filterLimit}`}
             </button>
           ))}
           <button
@@ -243,6 +251,22 @@ export const AccelerationComparison = memo(({
           >
             Мощность
           </button>
+          <div className="flex items-center gap-2 ml-2">
+            <label className="text-xs text-slate-400">Лимит:</label>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={filterLimit}
+              onChange={(e) => {
+                const value = parseInt(e.target.value);
+                if (!isNaN(value) && value >= 1 && value <= 50) {
+                  setFilterLimit(value);
+                }
+              }}
+              className="w-16 px-2 py-1 rounded-lg text-xs font-semibold bg-slate-700/50 border border-slate-600 text-slate-300 focus:outline-none focus:border-blue-500"
+            />
+          </div>
         </div>
       </div>
 
@@ -254,56 +278,63 @@ export const AccelerationComparison = memo(({
         </div>
       ) : (
         <>
-          {/* Chart */}
-          <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl border border-white/10 p-4 h-[400px]">
-            <Line data={chartData} options={chartOptions} />
-          </div>
+          {/* Chart with ChartWithZoom */}
+          {timeRange && (
+            <ChartWithZoom
+              data={chartData}
+              options={chartOptions}
+              height={400}
+              timeRange={timeRange}
+              timelineMarkers={timelineMarkers}
+              timelineLabel="Шкала времени"
+            />
+          )}
 
           {/* Delta metrics table */}
           <div className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Таблица дельта-метрик</h2>
-            <p className="text-xs text-slate-400 mb-4">
+            <h2 className="text-lg font-bold text-white mb-4 text-center">Таблица дельта-метрик</h2>
+            <p className="text-xs text-slate-400 mb-4 text-center">
               Разница относительно лучшей попытки ({bestAttempt?.time.toFixed(2)}с)
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">№</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">Время (с)</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">Дистанция (м)</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">Пик. мощн. (Вт)</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">Ср. мощн. (Вт)</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">Падение бат. (%)</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">ΔВремя</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">ΔДистанция</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">ΔПик. мощн.</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">ΔСр. мощн.</th>
-                    <th className="text-left text-slate-300 font-medium py-2 px-3">ΔПадение бат.</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">№</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">Время (с)</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">Дистанция (м)</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">Пик. мощн. (Вт)</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">Ср. мощн. (Вт)</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">Падение бат. (%)</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">ΔВремя</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">ΔДистанция</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">ΔПик. мощн.</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">ΔСр. мощн.</th>
+                    <th className="text-center text-slate-300 font-medium py-2 px-3">ΔПадение бат.</th>
                   </tr>
                 </thead>
                 <tbody>
                   {deltaMetrics.map((item, index) => (
                     <tr key={item.attempt.id} className="border-b border-white/5">
-                      <td className="text-slate-300 py-2 px-3">{index + 1}</td>
-                      <td className="text-slate-300 py-2 px-3">{item.attempt.time.toFixed(2)}</td>
-                      <td className="text-slate-300 py-2 px-3">{item.attempt.distance.toFixed(1)}</td>
-                      <td className="text-slate-300 py-2 px-3">{item.attempt.peakPower.toFixed(1)}</td>
-                      <td className="text-slate-300 py-2 px-3">{item.attempt.averagePower.toFixed(1)}</td>
-                      <td className="text-slate-300 py-2 px-3">{item.attempt.batteryDrop.toFixed(1)}</td>
-                      <td className={item.deltaTime === 0 ? 'text-slate-400' : item.deltaTime > 0 ? 'text-red-400' : 'text-green-400'} py-2 px-3>
+                      <td className="text-slate-300 py-2 px-3 text-center">{index + 1}</td>
+                      <td className="text-slate-300 py-2 px-3 text-center">{item.attempt.time.toFixed(2)}</td>
+                      <td className="text-slate-300 py-2 px-3 text-center">{item.attempt.distance.toFixed(1)}</td>
+                      <td className="text-slate-300 py-2 px-3 text-center">{item.attempt.peakPower.toFixed(1)}</td>
+                      <td className="text-slate-300 py-2 px-3 text-center">{item.attempt.averagePower.toFixed(1)}</td>
+                      <td className="text-slate-300 py-2 px-3 text-center">{item.attempt.batteryDrop.toFixed(1)}</td>
+                      <td className={cn(item.deltaTime === 0 ? 'text-slate-400' : item.deltaTime > 0 ? 'text-red-400' : 'text-green-400', 'py-2 px-3 text-center')}>
                         {item.deltaTime === 0 ? '-' : `${item.deltaTime > 0 ? '+' : ''}${item.deltaTime.toFixed(2)}`}
                       </td>
-                      <td className={item.deltaDistance === 0 ? 'text-slate-400' : item.deltaDistance > 0 ? 'text-green-400' : 'text-red-400'} py-2 px-3>
+                      <td className={cn(item.deltaDistance === 0 ? 'text-slate-400' : item.deltaDistance > 0 ? 'text-green-400' : 'text-red-400', 'py-2 px-3 text-center')}>
                         {item.deltaDistance === 0 ? '-' : `${item.deltaDistance > 0 ? '+' : ''}${item.deltaDistance.toFixed(1)}`}
                       </td>
-                      <td className={item.deltaPeakPower === 0 ? 'text-slate-400' : item.deltaPeakPower < 0 ? 'text-green-400' : 'text-red-400'} py-2 px-3>
+                      <td className={cn(item.deltaPeakPower === 0 ? 'text-slate-400' : item.deltaPeakPower < 0 ? 'text-green-400' : 'text-red-400', 'py-2 px-3 text-center')}>
                         {item.deltaPeakPower === 0 ? '-' : `${item.deltaPeakPower > 0 ? '+' : ''}${item.deltaPeakPower.toFixed(1)}`}
                       </td>
-                      <td className={item.deltaAvgPower === 0 ? 'text-slate-400' : item.deltaAvgPower < 0 ? 'text-green-400' : 'text-red-400'} py-2 px-3>
+                      <td className={cn(item.deltaAvgPower === 0 ? 'text-slate-400' : item.deltaAvgPower < 0 ? 'text-green-400' : 'text-red-400', 'py-2 px-3 text-center')}>
                         {item.deltaAvgPower === 0 ? '-' : `${item.deltaAvgPower > 0 ? '+' : ''}${item.deltaAvgPower.toFixed(1)}`}
                       </td>
-                      <td className={item.deltaBatteryDrop === 0 ? 'text-slate-400' : item.deltaBatteryDrop < 0 ? 'text-green-400' : 'text-red-400'} py-2 px-3>
+                      <td className={cn(item.deltaBatteryDrop === 0 ? 'text-slate-400' : item.deltaBatteryDrop < 0 ? 'text-green-400' : 'text-red-400', 'py-2 px-3 text-center')}>
                         {item.deltaBatteryDrop === 0 ? '-' : `${item.deltaBatteryDrop > 0 ? '+' : ''}${item.deltaBatteryDrop.toFixed(1)}`}
                       </td>
                     </tr>

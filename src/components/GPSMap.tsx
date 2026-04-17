@@ -46,8 +46,8 @@ function CurrentPositionMarker({ data, currentTime }: { data: GPSMapProps['data'
       return Math.abs(curr.timestamp - currentTime) < Math.abs(prev.timestamp - currentTime) ? curr : prev;
     });
 
-    if (closestPoint.Latitude !== undefined && closestPoint.Longitude !== undefined) {
-      map.panTo([closestPoint.Latitude, closestPoint.Longitude]);
+    if (closestPoint.Latitude !== null && closestPoint.Latitude !== undefined && closestPoint.Longitude !== null && closestPoint.Longitude !== undefined) {
+      map.panTo([closestPoint.Latitude!, closestPoint.Longitude!]);
     }
   }, [currentTime, data, map]);
 

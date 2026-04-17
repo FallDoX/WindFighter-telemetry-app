@@ -148,6 +148,16 @@ const ToggleChip = memo(({ label, active, onClick, color = "primary" }: ToggleCh
 });
 
 function App() {
+  interface FileDataset {
+    id: string;
+    name: string;
+    data: TripEntry[];
+    summary: TripSummary | null;
+    timeRange: { start: number; end: number } | null;
+  }
+
+  const [datasets, setDatasets] = useState<FileDataset[]>([]);
+  const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null);
   const [data, setData] = useState<TripEntry[]>([]);
   const [summary, setSummary] = useState<TripSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -822,26 +832,39 @@ function App() {
       alert(i18n.t('uploadError'));
       return;
     }
-    setFileName(file.name);
     setLoading(true);
     setError(null);
+    setFileName(file.name);
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
         const parsedData = parseTripData(text);
+        const summary = calculateSummary(parsedData);
+        
+        const timeRange = parsedData.length > 0 
+          ? { start: parsedData[0].timestamp, end: parsedData[parsedData.length - 1].timestamp }
+          : null;
+
+        const newDataset: FileDataset = {
+          id: `${file.name}-${Date.now()}`,
+          name: file.name,
+          data: parsedData,
+          summary,
+          timeRange,
+        };
+
+        setDatasets(prev => [...prev, newDataset]);
+        setActiveDatasetId(newDataset.id);
         setData(parsedData);
-        setSummary(calculateSummary(parsedData));
-        resetZoom(); // Reset zoom on new file load
-        // Reset time range
-        if (parsedData.length > 0) {
-        const timestamps = parsedData.map(e => e.timestamp);
-        setTimeRange({
-          start: Math.min(...timestamps),
-          end: Math.max(...timestamps),
-        });
-      }
-      setLoading(false);
+        setSummary(summary);
+        setTimeRange(timeRange);
+        
+        // Reset acceleration state when new file is loaded
+        clearSettings();
+        
+        setLoading(false);
       } catch (err) {
         setLoading(false);
         setError(err instanceof Error ? err.message : 'Ошибка при чтении файла');
@@ -851,8 +874,10 @@ function App() {
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) handleFile(file);
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      Array.from(files).forEach(file => handleFile(file));
+    }
   };
 
   const onDragOver = (e: React.DragEvent) => {
@@ -878,8 +903,44 @@ function App() {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      Array.from(files).forEach(file => handleFile(file));
+    }
+  };
+
+  const handleSwitchDataset = (datasetId: string) => {
+    const dataset = datasets.find(d => d.id === datasetId);
+    if (dataset) {
+      setActiveDatasetId(datasetId);
+      setData(dataset.data);
+      setSummary(dataset.summary);
+      setTimeRange(dataset.timeRange);
+      setFileName(dataset.name);
+      clearSettings();
+    }
+  };
+
+  const handleRemoveDataset = (datasetId: string) => {
+    setDatasets(prev => {
+      const newDatasets = prev.filter(d => d.id !== datasetId);
+      if (activeDatasetId === datasetId && newDatasets.length > 0) {
+        const nextActive = newDatasets[newDatasets.length - 1];
+        setActiveDatasetId(nextActive.id);
+        setData(nextActive.data);
+        setSummary(nextActive.summary);
+        setTimeRange(nextActive.timeRange);
+        setFileName(nextActive.name);
+        clearSettings();
+      } else if (activeDatasetId === datasetId) {
+        setActiveDatasetId(null);
+        setData([]);
+        setSummary(null);
+        setTimeRange(null);
+        setFileName('');
+      }
+      return newDatasets;
+    });
   };
 
   // Common chart options for maximum performance
@@ -1172,6 +1233,37 @@ function App() {
                 {i18n.t('appTitle')}
               </h1>
               <p className="text-slate-400 text-sm">{i18n.t('appSubtitle')}</p>
+              {datasets.length > 0 && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {datasets.map(dataset => (
+                      <div
+                        key={dataset.id}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs cursor-pointer transition-colors ${
+                          dataset.id === activeDatasetId
+                            ? 'bg-blue-500/30 text-blue-200 border border-blue-500/50'
+                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border border-slate-600'
+                        }`}
+                        onClick={() => handleSwitchDataset(dataset.id)}
+                      >
+                        <span className="truncate max-w-[150px]">{dataset.name}</span>
+                        {datasets.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveDataset(dataset.id);
+                            }}
+                            className="ml-1 hover:text-red-400 transition-colors"
+                            title="Удалить"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {fileName && (
                 <div className="flex items-center gap-2 mt-1.5">
                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -1191,7 +1283,7 @@ function App() {
         </header>
 
         {/* Hidden file input for start page upload */}
-        <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} aria-label="Загрузить CSV файл" />
+        <input type="file" accept=".csv" multiple className="hidden" onChange={handleFileUpload} aria-label="Загрузить CSV файлы" />
 
         {/* Drag overlay */}
         {isDragging && (

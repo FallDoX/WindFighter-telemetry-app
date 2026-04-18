@@ -133,12 +133,25 @@ export const AccelerationTab = memo(({
           e => e.timestamp >= attempt.startTimestamp && e.timestamp <= attempt.endTimestamp
         );
 
+        console.log(`Attempt ${attempt.id} data points:`, attemptData.length, {
+          startTimestamp: attempt.startTimestamp,
+          endTimestamp: attempt.endTimestamp,
+          dataRange: attemptData.length > 0 ? { first: attemptData[0].timestamp, last: attemptData[attemptData.length - 1].timestamp } : null,
+        });
+
         if (attemptData.length > 0) {
           // Find the original index of this attempt to use consistent colors
           const originalIndex = accelerationAttempts.findIndex(a => a.id === attempt.id);
+          const chartData = attemptData.map(e => ({ x: (e.timestamp - attempt.startTimestamp) / 1000, y: e.Speed }));
+          console.log(`Dataset for attempt ${attempt.id}:`, {
+            label: `${preset.label} #${index + 1}`,
+            dataPoints: chartData.length,
+            firstPoint: chartData[0],
+            lastPoint: chartData[chartData.length - 1],
+          });
           datasets.push({
             label: `${preset.label} #${index + 1} (${attempt.time.toFixed(2)}с, ${attempt.distance.toFixed(1)}м)`,
-            data: attemptData.map(e => ({ x: (e.timestamp - attempt.startTimestamp) / 1000, y: e.Speed })),
+            data: chartData,
             borderColor: ATTEMPT_COLORS[originalIndex % ATTEMPT_COLORS.length],
             backgroundColor: `${ATTEMPT_COLORS[originalIndex % ATTEMPT_COLORS.length]}33`,
             fill: false,

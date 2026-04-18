@@ -145,12 +145,24 @@ export const AccelerationTab = memo(({
         if (attemptData.length > 0) {
           // Find the original index of this attempt to use consistent colors
           const originalIndex = accelerationAttempts.findIndex(a => a.id === attempt.id);
-          const chartData = attemptData.map(e => ({ x: (e.timestamp - attempt.startTimestamp) / 1000, y: e.Speed }));
+          
+          // Truncate data to preset target speed
+          let chartData = attemptData.map(e => ({ x: (e.timestamp - attempt.startTimestamp) / 1000, y: e.Speed }));
+          
+          // If preset has a target speed, truncate data to that speed
+          if (preset.to > 0) {
+            const targetIndex = chartData.findIndex(point => point.y >= preset.to);
+            if (targetIndex !== -1) {
+              chartData = chartData.slice(0, targetIndex + 1);
+            }
+          }
+          
           console.log(`Dataset for attempt ${attempt.id}:`, {
             label: `${preset.label} #${index + 1}`,
             dataPoints: chartData.length,
             firstPoint: chartData[0],
             lastPoint: chartData[chartData.length - 1],
+            truncatedTo: preset.to > 0 ? preset.to : 'full',
           });
           datasets.push({
             label: `${preset.label} #${index + 1} (${attempt.time.toFixed(2)}с, ${attempt.distance.toFixed(1)}м)`,

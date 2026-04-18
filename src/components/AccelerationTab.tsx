@@ -286,11 +286,6 @@ export const AccelerationTab = memo(({
                   attempt => attempt.thresholdPair.to >= preset.to && attempt.thresholdPair.from === preset.from
                 ).length;
 
-            // Debug: log attempt counts
-            console.log(`Preset ${preset.label}: attemptCount=${attemptCount}`, preset.id === 'custom' ? '(all)' : accelerationAttempts.filter(
-              attempt => attempt.thresholdPair.to >= preset.to && attempt.thresholdPair.from === preset.from
-            ));
-
             return (
               <button
                 key={preset.id}

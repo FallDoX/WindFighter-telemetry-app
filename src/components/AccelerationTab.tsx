@@ -125,11 +125,13 @@ export const AccelerationTab = memo(({
         );
 
         if (attemptData.length > 0) {
+          // Find the original index of this attempt to use consistent colors
+          const originalIndex = accelerationAttempts.findIndex(a => a.id === attempt.id);
           datasets.push({
             label: `${preset.label} #${index + 1} (${attempt.time.toFixed(2)}с, ${attempt.distance.toFixed(1)}м)`,
             data: attemptData.map(e => ({ x: (e.timestamp - attempt.startTimestamp) / 1000, y: e.Speed })),
-            borderColor: PRESET_COLORS[preset.id as keyof typeof PRESET_COLORS],
-            backgroundColor: `${PRESET_COLORS[preset.id as keyof typeof PRESET_COLORS]}33`,
+            borderColor: ATTEMPT_COLORS[originalIndex % ATTEMPT_COLORS.length],
+            backgroundColor: `${ATTEMPT_COLORS[originalIndex % ATTEMPT_COLORS.length]}33`,
             fill: false,
             tension: 0.1,
             pointRadius: 0,

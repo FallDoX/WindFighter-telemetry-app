@@ -111,16 +111,19 @@ export const AccelerationTab = memo(({
       selectedPresets: Array.from(selectedPresets),
       accelerationAttemptsCount: accelerationAttempts.length,
       accelerationAttempts: accelerationAttempts.map(a => ({ id: a.id, threshold: `${a.thresholdPair.from}-${a.thresholdPair.to}` })),
+      visibleAttempts: Array.from(visibleAttempts),
     });
 
     selectedPresets.forEach(presetId => {
       const preset = PRESETS.find(p => p.id === presetId);
+      console.log('Processing preset:', presetId, preset);
       if (!preset || preset.id === 'custom') return;
 
       // Filter attempts that reach at least the preset target speed
       const presetAttempts = accelerationAttempts.filter(
         attempt => attempt.thresholdPair.to >= preset.to && attempt.thresholdPair.from === preset.from
       );
+      console.log(`Preset ${preset.label} matches:`, presetAttempts.length, presetAttempts.map(a => ({id: a.id, threshold: `${a.thresholdPair.from}-${a.thresholdPair.to}`})));
 
       presetAttempts.forEach((attempt, index) => {
         // Skip if attempt is hidden

@@ -93,7 +93,9 @@ export const AccelerationTab = memo(({
       });
     }
 
-    return maxDuration > 0 ? { start: 0, end: maxDuration } : null;
+    const timeRange = maxDuration > 0 ? { start: 0, end: maxDuration } : null;
+    console.log('timeRange calculated:', { maxDuration, timeRange, selectedPresets: Array.from(selectedPresets) });
+    return timeRange;
   }, [accelerationAttempts, selectedPresets]);
 
   const accelerationChartData = useMemo(() => {

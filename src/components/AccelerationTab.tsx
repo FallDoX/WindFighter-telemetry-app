@@ -111,9 +111,9 @@ export const AccelerationTab = memo(({
       const preset = PRESETS.find(p => p.id === presetId);
       if (!preset || preset.id === 'custom') return;
 
-      // Filter attempts that fall within the preset speed range
+      // Filter attempts that reach at least the preset target speed
       const presetAttempts = accelerationAttempts.filter(
-        attempt => attempt.thresholdPair.to <= preset.to && attempt.thresholdPair.from === preset.from
+        attempt => attempt.thresholdPair.to >= preset.to && attempt.thresholdPair.from === preset.from
       );
 
       presetAttempts.forEach((attempt, index) => {
@@ -257,12 +257,12 @@ export const AccelerationTab = memo(({
             const attemptCount = preset.id === 'custom'
               ? accelerationAttempts.length
               : accelerationAttempts.filter(
-                  attempt => attempt.thresholdPair.to <= preset.to && attempt.thresholdPair.from === preset.from
+                  attempt => attempt.thresholdPair.to >= preset.to && attempt.thresholdPair.from === preset.from
                 ).length;
 
             // Debug: log attempt counts
             console.log(`Preset ${preset.label}: attemptCount=${attemptCount}`, preset.id === 'custom' ? '(all)' : accelerationAttempts.filter(
-              attempt => attempt.thresholdPair.to <= preset.to && attempt.thresholdPair.from === preset.from
+              attempt => attempt.thresholdPair.to >= preset.to && attempt.thresholdPair.from === preset.from
             ));
 
             return (
